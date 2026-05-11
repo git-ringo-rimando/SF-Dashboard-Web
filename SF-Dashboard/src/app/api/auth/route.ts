@@ -9,7 +9,16 @@ export async function POST(req: NextRequest) {
   }
 
   // Verify the credentials actually work before saving them
-  const result = await verifyLogin(username, password);
+  let result: { ok: true } | { ok: false; error: string };
+  try {
+    result = await verifyLogin(username, password);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    const friendly = /timeout|ECONNREFUSED|net::ERR/i.test(msg)
+      ? "Could not reach sfsupport.dataon.com — check your connection and try again."
+      : "An unexpected error occurred while verifying your credentials.";
+    return NextResponse.json({ error: friendly }, { status: 502 });
+  }
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: 401 });
   }

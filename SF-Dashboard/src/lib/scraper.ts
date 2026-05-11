@@ -189,6 +189,7 @@ export async function verifyLogin(
     return await doLogin(page, username, password);
   } finally {
     await page.close();
+    await browser.close();
   }
 }
 
