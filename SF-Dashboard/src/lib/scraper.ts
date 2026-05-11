@@ -15,6 +15,7 @@ const BASE = "https://sfsupport.dataon.com";
 
 async function getBrowser(): Promise<Browser> {
   const executablePath = process.env.CHROMIUM_PATH ?? undefined;
+  const isLinux = process.platform === "linux";
   console.log("[browser] launching chromium:", executablePath ?? "puppeteer default");
   return puppeteer.launch({
     headless: true,
@@ -23,8 +24,9 @@ async function getBrowser(): Promise<Browser> {
       "--no-sandbox",
       "--disable-setuid-sandbox",
       "--disable-dev-shm-usage",
-      "--single-process",
-      "--no-zygote",
+      // single-process/no-zygote stabilise Chromium inside Linux Docker containers
+      // but cause crashes on Windows — only enable on Linux
+      ...(isLinux ? ["--single-process", "--no-zygote"] : []),
       "--disable-gpu",
       "--disable-extensions",
       "--disable-background-networking",
@@ -188,8 +190,8 @@ export async function verifyLogin(
   try {
     return await doLogin(page, username, password);
   } finally {
-    await page.close();
-    await browser.close();
+    await page.close().catch(() => {});
+    await browser.close().catch(() => {});
   }
 }
 

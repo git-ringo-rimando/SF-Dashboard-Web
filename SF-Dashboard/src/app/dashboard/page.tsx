@@ -1114,6 +1114,7 @@ export default function Dashboard() {
   const [loading, setLoading]   = useState(true);
   const [scraping, setScraping] = useState(false);
   const [scrapeProgress, setScrapeProgress] = useState<{ phase: string; current: number; total: number } | null>(null);
+  const [scrapeMaxPct, setScrapeMaxPct] = useState(5);
   const [nextAt, setNextAt]     = useState(Date.now() + REFRESH_MS);
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters]   = useState<Filters>(() => {
@@ -1238,6 +1239,7 @@ export default function Dashboard() {
 
   const triggerScrape = useCallback(async () => {
     setScraping(true);
+    setScrapeMaxPct(5);
     const dates = (cache?.recentTickets ?? [])
       .map((t) => toDateOnly(t.createdDate))
       .filter(Boolean) as string[];
@@ -1286,14 +1288,18 @@ export default function Dashboard() {
 
   // Poll /api/progress every 2s while a scrape is running
   useEffect(() => {
-    if (!scraping) { setScrapeProgress(null); return; }
+    if (!scraping) { setScrapeProgress(null); setScrapeMaxPct(5); return; }
     let cancelled = false;
     const tick = async () => {
       if (cancelled) return;
       try {
         const res = await fetch("/api/progress");
         const p = await res.json();
-        if (!cancelled) setScrapeProgress(p ?? null);
+        if (!cancelled && p) {
+          setScrapeProgress(p);
+          const pct = p.total > 0 ? Math.min(100, (p.current / p.total) * 100) : 5;
+          setScrapeMaxPct((prev) => Math.max(prev, pct));
+        }
       } catch {}
       if (!cancelled) setTimeout(tick, 2000);
     };
@@ -1902,11 +1908,7 @@ export default function Dashboard() {
             <div className="w-full h-1.5 bg-teal-900/60 rounded-full overflow-hidden">
               <div
                 className="h-full bg-teal-400 rounded-full transition-all duration-500"
-                style={{
-                  width: scrapeProgress && scrapeProgress.total > 0
-                    ? `${Math.min(100, (scrapeProgress.current / scrapeProgress.total) * 100)}%`
-                    : "5%",
-                }}
+                style={{ width: `${scrapeMaxPct}%` }}
               />
             </div>
           </div>
