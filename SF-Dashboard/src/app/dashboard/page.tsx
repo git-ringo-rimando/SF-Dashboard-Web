@@ -1196,6 +1196,11 @@ export default function Dashboard() {
       hasShownInitialModalRef.current = true;
       setShowOpenTicketsModal(true);
     }
+    // If a background scrape is already running (e.g. started after login), start polling
+    try {
+      const prog = await fetch("/api/progress").then((r) => r.json());
+      if (prog) setScraping(true);
+    } catch {}
   }, [router]);
 
   // Sync notification permission state
@@ -1251,17 +1256,7 @@ export default function Dashboard() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ targetDateFrom: defaultFrom }),
     }).catch(() => {});
-    const before = cache?.scrapedAt;
-    const poll = async () => {
-      const res  = await fetch("/api/data");
-      const json = await res.json();
-      if (json.cache?.scrapedAt !== before) {
-        setCache(json.cache);
-        if (json.tags) setTagMap(json.tags);
-        setScraping(false); setNextAt(Date.now() + REFRESH_MS);
-      } else setTimeout(poll, 4000);
-    };
-    setTimeout(poll, 4000);
+    // Polling is handled by the scraping useEffect above
   }, [cache]);
 
   const updateTag = useCallback(async (project: string, tag: ProductTag | null) => {
@@ -1286,19 +1281,26 @@ export default function Dashboard() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  // Poll /api/progress every 2s while a scrape is running
+  // While scraping: poll progress + data together so partial cache appears immediately
   useEffect(() => {
     if (!scraping) { setScrapeProgress(null); setScrapeMaxPct(5); return; }
     let cancelled = false;
     const tick = async () => {
       if (cancelled) return;
       try {
-        const res = await fetch("/api/progress");
-        const p = await res.json();
-        if (!cancelled && p) {
+        const [progRes, dataRes] = await Promise.all([fetch("/api/progress"), fetch("/api/data")]);
+        const p    = await progRes.json();
+        const json = await dataRes.json();
+        if (cancelled) return;
+        if (json.cache) { setCache(json.cache); if (json.tags) setTagMap(json.tags); }
+        if (p) {
           setScrapeProgress(p);
           const pct = p.total > 0 ? Math.min(100, (p.current / p.total) * 100) : 5;
           setScrapeMaxPct((prev) => Math.max(prev, pct));
+        } else {
+          setScraping(false);
+          setNextAt(Date.now() + REFRESH_MS);
+          return;
         }
       } catch {}
       if (!cancelled) setTimeout(tick, 2000);
@@ -1932,22 +1934,12 @@ export default function Dashboard() {
               <button
                 onClick={async () => {
                   setScraping(true);
-                  const before = cache?.scrapedAt;
+                  setScrapeMaxPct(5);
                   await fetch("/api/scrape", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ targetDateFrom: filters.dateFrom }),
                   }).catch(() => {});
-                  const poll = async () => {
-                    const res  = await fetch("/api/data");
-                    const json = await res.json();
-                    if (json.cache?.scrapedAt !== before) {
-                      setCache(json.cache);
-                      if (json.tags) setTagMap(json.tags);
-                      setScraping(false); setNextAt(Date.now() + REFRESH_MS);
-                    } else setTimeout(poll, 4000);
-                  };
-                  setTimeout(poll, 4000);
                 }}
                 disabled={scraping}
                 className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium

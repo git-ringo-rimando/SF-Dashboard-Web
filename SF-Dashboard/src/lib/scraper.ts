@@ -322,7 +322,7 @@ async function waitForTicketData(page: Page, timeout = 90000): Promise<void> {
   ).catch(() => {});
 }
 
-async function extractTicketList(page: Page, startedAt: string, targetDateFrom?: string): Promise<RecentTicket[]> {
+async function extractTicketList(page: Page, startedAt: string, targetDateFrom?: string, onFirstPage?: (tickets: RecentTicket[]) => Promise<void>): Promise<RecentTicket[]> {
   if (!page.url().includes("/app/ticket/list")) {
     await safeGoto(page, `${BASE}/app/ticket/list`);
   }
@@ -387,6 +387,10 @@ async function extractTicketList(page: Page, startedAt: string, targetDateFrom?:
 
     const { tickets, hasNext, firstTicketNo } = pageResult;
     all.push(...tickets);
+
+    if (p === 0 && tickets.length > 0 && onFirstPage) {
+      await onFirstPage(tickets).catch(() => {});
+    }
 
     // Stop when oldest ticket on page is on or before the target date
     if (targetDateFrom && tickets.length > 0) {
@@ -761,7 +765,10 @@ export async function scrape(username: string, password: string, targetDateFrom?
 
     // Run sequentially to keep peak memory low on constrained hosts.
     saveProgress({ phase: "Fetching tickets", current: 0, total: 1, startedAt });
-    const recentTickets = await extractTicketList(page, startedAt, targetDateFrom);
+    const recentTickets = await extractTicketList(page, startedAt, targetDateFrom, async (firstPage) => {
+      // Save a partial cache after the first page so the dashboard can render immediately
+      await saveCache({ ...empty, scrapedAt: new Date().toISOString(), recentTickets: firstPage });
+    });
 
     saveProgress({ phase: "Fetching partner dashboard", current: 0, total: 1, startedAt });
     const partnerData = await runOnNewPage(browser, cookies, extractPartnerDashboard);
