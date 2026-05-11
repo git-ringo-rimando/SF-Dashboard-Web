@@ -397,10 +397,12 @@ async function extractTicketList(page: Page, startedAt: string, targetDateFrom?:
       await onFirstPage(tickets).catch(() => {});
     }
 
-    // Stop when oldest ticket on page is on or before the target date
+    // Stop when oldest ticket on page is BEFORE the target date.
+    // Use strict < so tickets from the target date itself are fully captured
+    // across all pages (guards against stopping early when all tickets share the same date).
     if (targetDateFrom && tickets.length > 0) {
       const oldest = toDateOnlyServer(tickets[tickets.length - 1].createdDate);
-      if (oldest && oldest <= targetDateFrom) break;
+      if (oldest && oldest < targetDateFrom) break;
     }
 
     if (!hasNext) break;

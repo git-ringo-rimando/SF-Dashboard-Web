@@ -1134,6 +1134,7 @@ export default function Dashboard() {
   });
   const prevOpenIdsRef = useRef<Set<string> | null>(null);
   const hasShownInitialModalRef = useRef(false);
+  const scrapingRef = useRef(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const openModalTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const newModalTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1243,6 +1244,7 @@ export default function Dashboard() {
   }, [cache]);
 
   const triggerScrape = useCallback(async () => {
+    if (scrapingRef.current) return;
     setScraping(true);
     setScrapeMaxPct(5);
     const dates = (cache?.recentTickets ?? [])
@@ -1280,6 +1282,8 @@ export default function Dashboard() {
   }, [triggerScrape]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  useEffect(() => { scrapingRef.current = scraping; }, [scraping]);
 
   // While scraping: poll progress + data together so partial cache appears immediately
   useEffect(() => {
