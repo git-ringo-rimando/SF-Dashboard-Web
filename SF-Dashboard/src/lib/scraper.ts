@@ -13,25 +13,30 @@ import {
 
 const BASE = "https://sfsupport.dataon.com";
 
-let activeBrowser: Browser | null = null;
-
 async function getBrowser(): Promise<Browser> {
-  if (activeBrowser) {
-    try {
-      await activeBrowser.version();
-      return activeBrowser;
-    } catch {
-      activeBrowser = null;
-    }
-  }
   const executablePath = process.env.CHROMIUM_PATH ?? undefined;
   console.log("[browser] launching chromium:", executablePath ?? "puppeteer default");
-  return (activeBrowser = await puppeteer.launch({
+  return puppeteer.launch({
     headless: true,
     executablePath,
-    args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
+    args: [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
+      "--single-process",
+      "--no-zygote",
+      "--disable-gpu",
+      "--disable-extensions",
+      "--disable-background-networking",
+      "--disable-default-apps",
+      "--disable-sync",
+      "--disable-translate",
+      "--hide-scrollbars",
+      "--mute-audio",
+      "--no-first-run",
+    ],
     protocolTimeout: 360_000,
-  }));
+  });
 }
 
 /** page.goto with retry on navigation timeout or transient network errors.
@@ -742,19 +747,15 @@ export async function scrape(username: string, password: string, targetDateFrom?
     // Copy session cookies so parallel pages share the same auth
     const cookies = await page.cookies();
 
-    // Ticket list paginates on the main page; partner dashboard + statistics
-    // run concurrently on separate pages to cut total time significantly.
-    const [recentTickets, partnerData, statData] = await Promise.all([
-      extractTicketList(page, startedAt, targetDateFrom),
-      runOnNewPage(browser, cookies, (p) => {
-        saveProgress({ phase: "Fetching partner dashboard", current: 0, total: 1, startedAt });
-        return extractPartnerDashboard(p);
-      }),
-      runOnNewPage(browser, cookies, (p) => {
-        saveProgress({ phase: "Fetching statistics", current: 0, total: 1, startedAt });
-        return extractStatistics(p);
-      }),
-    ]);
+    // Run sequentially to keep peak memory low on constrained hosts.
+    saveProgress({ phase: "Fetching tickets", current: 0, total: 1, startedAt });
+    const recentTickets = await extractTicketList(page, startedAt, targetDateFrom);
+
+    saveProgress({ phase: "Fetching partner dashboard", current: 0, total: 1, startedAt });
+    const partnerData = await runOnNewPage(browser, cookies, extractPartnerDashboard);
+
+    saveProgress({ phase: "Fetching statistics", current: 0, total: 1, startedAt });
+    const statData = await runOnNewPage(browser, cookies, extractStatistics);
 
     // Apply previously enriched times before deciding what still needs a detail fetch.
     for (const ticket of recentTickets) {
@@ -771,7 +772,7 @@ export async function scrape(username: string, password: string, targetDateFrom?
     if (needsEnrichment.length > 0) {
       let enriched = 0;
       saveProgress({ phase: "Enriching ticket times", current: 0, total: needsEnrichment.length, startedAt });
-      const times = await pLimit(needsEnrichment, 5, async (t) => {
+      const times = await pLimit(needsEnrichment, 2, async (t) => {
         const result = await runOnNewPage(browser, cookies, (p) => fetchCreatedTime(p, t.ticketNo));
         saveProgress({ phase: "Enriching ticket times", current: ++enriched, total: needsEnrichment.length, startedAt });
         return result;
@@ -801,5 +802,6 @@ export async function scrape(username: string, password: string, targetDateFrom?
   } finally {
     clearProgress();
     await page.close();
+    await browser.close();
   }
 }
