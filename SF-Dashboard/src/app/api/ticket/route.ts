@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
   const { ticketNo } = await req.json().catch(() => ({}));
   if (!ticketNo) return NextResponse.json({ error: "ticketNo required" }, { status: 400 });
 
-  const creds = loadCredentials();
+  const creds = await loadCredentials();
   if (!creds) return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
 
   const result = await scrapeTicketDetail(creds.username, creds.password, ticketNo);
