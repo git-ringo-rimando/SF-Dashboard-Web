@@ -81,7 +81,7 @@ const DATE_PRESETS = [
   { value: "today",           label: "Today" },
   { value: "yesterday-today", label: "Yesterday – Today" },
   { value: "yesterday",       label: "Yesterday" },
-  { value: "this-week",       label: "This Week" },
+  { value: "this-week",       label: "Last 7 Days" },
   { value: "this-month",      label: "This Month" },
   { value: "custom",          label: "Custom" },
 ] as const;
@@ -105,10 +105,8 @@ function getPresetDates(preset: string): { from: string; to: string } {
       return { from: offset(-1), to: todayStr };
     case "yesterday":
       return pastCutoff ? { from: offset(-1), to: todayStr } : { from: offset(-2), to: offset(-1) };
-    case "this-week": {
-      const day = today.getDay();
-      return { from: offset(-(day === 0 ? 6 : day - 1)), to: todayStr };
-    }
+    case "this-week":
+      return { from: offset(-6), to: todayStr };
     case "this-month":
       return { from: toInputDate(new Date(today.getFullYear(), today.getMonth(), 1)), to: todayStr };
     default:
@@ -662,12 +660,18 @@ function TicketMiniTable({ rows, title, tagMap = {}, breakdown = false }: { rows
 }
 
 function ModuleTable({ rows }: { rows: ModuleRow[] }) {
+  const [collapsed, setCollapsed] = useState(false);
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-      <div className="px-5 py-3 border-b border-gray-800">
+      <div className="px-5 py-3 border-b border-gray-800 flex items-center justify-between">
         <h3 className="font-semibold text-white text-sm">Module Breakdown</h3>
+        <button onClick={() => setCollapsed((c) => !c)}
+          className="text-gray-500 hover:text-white transition text-lg leading-none px-1"
+          title={collapsed ? "Expand" : "Collapse"}>
+          {collapsed ? "+" : "−"}
+        </button>
       </div>
-      <div className="overflow-x-auto">
+      {!collapsed && <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-800">
@@ -697,7 +701,7 @@ function ModuleTable({ rows }: { rows: ModuleRow[] }) {
             ))}
           </tbody>
         </table>
-      </div>
+      </div>}
     </div>
   );
 }
@@ -737,13 +741,21 @@ function SeverityTable({ rows }: { rows: SeverityRow[] }) {
 }
 
 function RecentTable({ rows, tagMap = {} }: { rows: RecentTicket[]; tagMap?: TagMap }) {
+  const [collapsed, setCollapsed] = useState(false);
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
       <div className="px-5 py-3 border-b border-gray-800 flex items-center justify-between">
         <h3 className="font-semibold text-white text-sm">Recent Tickets</h3>
-        <span className="text-xs text-gray-400">{rows.length} shown</span>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-gray-400">{rows.length} shown</span>
+          <button onClick={() => setCollapsed((c) => !c)}
+            className="text-gray-500 hover:text-white transition text-lg leading-none px-1"
+            title={collapsed ? "Expand" : "Collapse"}>
+            {collapsed ? "+" : "−"}
+          </button>
+        </div>
       </div>
-      <div className="overflow-x-auto">
+      {!collapsed && <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-800">
@@ -783,7 +795,7 @@ function RecentTable({ rows, tagMap = {} }: { rows: RecentTicket[]; tagMap?: Tag
               ))}
           </tbody>
         </table>
-      </div>
+      </div>}
     </div>
   );
 }
