@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: sf-dashboard
+    name: sf-dashboard-websg
     runtime: docker
     plan: free
     dockerfilePath: SF-Dashboard/Dockerfile
