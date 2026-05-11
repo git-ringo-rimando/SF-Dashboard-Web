@@ -1106,6 +1106,11 @@ function TagManager({
   );
 }
 
+// Module-level constants — defined once, never recreated on re-renders
+const SEV_ORDER: Record<string, number>    = { Critical: 0, High: 1, Medium: 2, Low: 3 };
+const STATUS_ORDER: Record<string, number> = { Open: 0, Reopen: 1, Responded: 2, Fixed: 3, Closed: 4, Cancelled: 5 };
+const UNRESOLVED_STATUSES                  = new Set(["Open", "Responded", "Reopen"]);
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function Dashboard() {
@@ -1380,11 +1385,9 @@ export default function Dashboard() {
       statuses: ALL_STATUSES.map((s) => ({ value: s, count: statusCounts[s] ?? 0 })),
       tags:     PRODUCT_TAGS.map((t) => ({ value: t, count: tagCounts[t] ?? 0 })),
     };
-  }, [cache, filters.dateFrom, filters.dateTo, filters.includedInternalProjects, tagMap]);
+  }, [cache, filters.dateFrom, filters.dateTo, filters.includedInternalProjects, filters.customExcludedProjects, tagMap]);
 
   // ── Apply filters ────────────────────────────────────────────────────────────
-  const SEV_ORDER: Record<string, number> = { Critical: 0, High: 1, Medium: 2, Low: 3 };
-  const STATUS_ORDER: Record<string, number> = { Open: 0, Reopen: 1, Responded: 2, Fixed: 3, Closed: 4, Cancelled: 5 };
 
   const filteredRecent = useMemo(() => {
     const rows = filterRecent(cache?.recentTickets ?? [], filters, tagMap);
@@ -1454,30 +1457,26 @@ export default function Dashboard() {
 
   // Unresolved = Open + Responded + Reopen from the ticket list (not from the partner
   // dashboard table, which can be empty or cover a different period).
-  const UNRESOLVED_STATUSES = useMemo(() => new Set(["Open", "Responded", "Reopen"]), []);
 
   const displayTotals = useMemo(() => {
-    const count = (s: string) => filteredRecent.filter((t) => t.status === s).length;
-    const unresolved = filteredRecent.filter((t) => UNRESOLVED_STATUSES.has(t.status)).length;
-    const computed = {
-      all:         filteredRecent.length,
-      open:        count("Open"),
-      responded:   count("Responded"),
-      reopen:      count("Reopen"),
-      fixed:       count("Fixed"),
-      closed:      count("Closed"),
-      cancelled:   count("Cancelled"),
-      unresolved,
-      unresponded: filteredUnresponded.length,
-    };
+    // Single pass over filteredRecent instead of one filter call per status
+    const counts = { all: filteredRecent.length, open: 0, responded: 0, reopen: 0, fixed: 0, closed: 0, cancelled: 0, unresolved: 0 };
+    for (const t of filteredRecent) {
+      if (t.status === "Open")        { counts.open++;        counts.unresolved++; }
+      else if (t.status === "Responded") { counts.responded++;   counts.unresolved++; }
+      else if (t.status === "Reopen") { counts.reopen++;      counts.unresolved++; }
+      else if (t.status === "Fixed")  counts.fixed++;
+      else if (t.status === "Closed") counts.closed++;
+      else if (t.status === "Cancelled") counts.cancelled++;
+    }
+    const computed = { ...counts, unresponded: filteredUnresponded.length };
     if (!isFiltered) {
-      // Fall back to computed totals when statistics page returned zeros
       const cached = cache?.totals;
       if (!cached || cached.all === 0) return computed;
-      return { ...cached, unresolved, unresponded: filteredUnresponded.length };
+      return { ...cached, unresolved: counts.unresolved, unresponded: filteredUnresponded.length };
     }
     return computed;
-  }, [isFiltered, cache, filteredRecent, filteredUnresponded, UNRESOLVED_STATUSES]);
+  }, [isFiltered, cache, filteredRecent, filteredUnresponded]);
 
   const displayModuleBreakdown = useMemo<ModuleRow[]>(() => {
     if (!isFiltered && cache?.moduleBreakdown?.length) return cache.moduleBreakdown;

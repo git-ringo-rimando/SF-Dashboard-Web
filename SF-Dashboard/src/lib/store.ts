@@ -189,22 +189,33 @@ function writeLocal(file: string, content: string): void {
 
 // ── Cache ────────────────────────────────────────────────────────────────────
 
+// In-process cache so repeated /api/data polls during scraping skip the disk read.
+// Invalidated immediately whenever saveCache writes new data.
+let _cacheMemory: DashboardCache | null | undefined = undefined; // undefined = not loaded yet
+
 export async function saveCache(data: DashboardCache): Promise<void> {
+  _cacheMemory = data; // keep in-process cache in sync
   const json = JSON.stringify(data);
   writeLocal(CACHE_FILE, json);
   await redisSet("sf:cache", json);
 }
 
 export async function loadCache(): Promise<DashboardCache | null> {
+  if (_cacheMemory !== undefined) return _cacheMemory;
   if (fs.existsSync(CACHE_FILE)) {
-    try { return JSON.parse(fs.readFileSync(CACHE_FILE, "utf8")); } catch {}
+    try {
+      const data = JSON.parse(fs.readFileSync(CACHE_FILE, "utf8")) as DashboardCache;
+      _cacheMemory = data;
+      return data;
+    } catch {}
   }
   // Local file missing (e.g. after Render redeploy) — fall back to Redis
   const raw = await redisGet("sf:cache");
-  if (!raw) return null;
+  if (!raw) { _cacheMemory = null; return null; }
   try {
     const data = JSON.parse(raw) as DashboardCache;
-    writeLocal(CACHE_FILE, raw); // warm the local file for subsequent reads
+    writeLocal(CACHE_FILE, raw);
+    _cacheMemory = data;
     return data;
   } catch {
     return null;
@@ -274,6 +285,7 @@ export async function loadProgress(): Promise<ScrapeProgress | null> {
 // ── Sign-out ──────────────────────────────────────────────────────────────────
 
 export async function clearAllData(): Promise<void> {
+  _cacheMemory = undefined;
   for (const file of [CREDS_FILE, CACHE_FILE, TAGS_FILE, PROGRESS_FILE]) {
     try { if (fs.existsSync(file)) fs.unlinkSync(file); } catch {}
   }
