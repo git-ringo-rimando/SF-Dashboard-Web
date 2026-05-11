@@ -15,14 +15,14 @@ export async function POST(req: NextRequest) {
   }
 
   // Login confirmed — save and kick off a full background scrape
-  saveCredentials(username, password);
+  await saveCredentials(username, password);
   scrape(username, password).catch(console.error);
 
   return NextResponse.json({ ok: true });
 }
 
 export async function GET() {
-  const creds = loadCredentials();
+  const creds = await loadCredentials();
   return NextResponse.json({ hasCredentials: !!creds, username: creds?.username ?? null });
 }
 

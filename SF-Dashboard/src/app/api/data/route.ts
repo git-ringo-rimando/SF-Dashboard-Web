@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { loadCredentials, loadCache, loadTags } from "@/lib/store";
 
 export async function GET() {
-  const creds = loadCredentials();
+  const creds = await loadCredentials();
   const hasCreds = !!creds;
   const [cache, tags] = hasCreds
     ? await Promise.all([loadCache(), loadTags()])

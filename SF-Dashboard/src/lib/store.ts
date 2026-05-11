@@ -7,9 +7,10 @@ const CREDS_FILE = path.join(DATA_DIR, "credentials.enc");
 const CACHE_FILE = path.join(DATA_DIR, "cache.json");
 
 const ALGORITHM = "aes-256-gcm";
+// Platform-independent secret — set CREDS_SECRET env var in production.
 const SECRET = crypto
   .createHash("sha256")
-  .update(`sf-dashboard-${process.platform}-${process.env.USERNAME ?? "user"}`)
+  .update(process.env.CREDS_SECRET ?? "sf-dashboard-app-secret")
   .digest();
 
 function encrypt(text: string): string {
@@ -30,22 +31,34 @@ function decrypt(encoded: string): string {
   return Buffer.concat([decipher.update(enc), decipher.final()]).toString("utf8");
 }
 
-export function saveCredentials(username: string, password: string): void {
+export async function saveCredentials(username: string, password: string): Promise<void> {
+  const encrypted = encrypt(JSON.stringify({ username, password }));
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-  fs.writeFileSync(CREDS_FILE, encrypt(JSON.stringify({ username, password })), "utf8");
+  fs.writeFileSync(CREDS_FILE, encrypted, "utf8");
+  await redisSet("sf:creds", encrypted, 90 * 86400);
 }
 
-export function loadCredentials(): { username: string; password: string } | null {
-  if (!fs.existsSync(CREDS_FILE)) return null;
+export async function loadCredentials(): Promise<{ username: string; password: string } | null> {
+  if (fs.existsSync(CREDS_FILE)) {
+    try { return JSON.parse(decrypt(fs.readFileSync(CREDS_FILE, "utf8"))); } catch {}
+  }
+  // Local file missing (container restart) — fall back to Redis
+  const raw = await redisGet("sf:creds");
+  if (!raw) return null;
   try {
-    return JSON.parse(decrypt(fs.readFileSync(CREDS_FILE, "utf8")));
+    const creds = JSON.parse(decrypt(raw)) as { username: string; password: string };
+    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+    fs.writeFileSync(CREDS_FILE, raw, "utf8");
+    return creds;
   } catch {
     return null;
   }
 }
 
-export function hasCredentials(): boolean {
-  return fs.existsSync(CREDS_FILE);
+export async function hasCredentials(): Promise<boolean> {
+  if (fs.existsSync(CREDS_FILE)) return true;
+  const raw = await redisGet("sf:creds");
+  return !!raw;
 }
 
 // ── Data shapes ──────────────────────────────────────────────────────────────

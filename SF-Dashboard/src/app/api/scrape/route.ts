@@ -3,7 +3,7 @@ import { loadCredentials } from "@/lib/store";
 import { scrape } from "@/lib/scraper";
 
 export async function POST(req: NextRequest) {
-  const creds = loadCredentials();
+  const creds = await loadCredentials();
   if (!creds) {
     return NextResponse.json({ error: "No credentials saved." }, { status: 401 });
   }
