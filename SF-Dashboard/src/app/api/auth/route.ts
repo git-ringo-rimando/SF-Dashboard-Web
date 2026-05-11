@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Verify the credentials actually work before saving them
-  let result: { ok: true } | { ok: false; error: string };
+  let result: { ok: true; cookies: import("puppeteer").Cookie[] } | { ok: false; error: string };
   try {
     result = await verifyLogin(username, password);
   } catch (e) {
@@ -23,9 +23,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: result.error }, { status: 401 });
   }
 
-  // Login confirmed — save and kick off a full background scrape
+  // Login confirmed — reuse the session cookies so the background scrape
+  // skips re-authentication and goes straight to fetching tickets
   await saveCredentials(username, password);
-  scrape(username, password).catch(console.error);
+  scrape(username, password, undefined, result.cookies).catch(console.error);
 
   return NextResponse.json({ ok: true });
 }

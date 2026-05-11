@@ -1,4 +1,4 @@
-import puppeteer, { type Browser, type Page } from "puppeteer";
+import puppeteer, { type Browser, type Page, type Cookie } from "puppeteer";
 import {
   saveCache,
   loadCache,
@@ -183,12 +183,17 @@ async function doLogin(
 export async function verifyLogin(
   username: string,
   password: string
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<{ ok: true; cookies: Cookie[] } | { ok: false; error: string }> {
   const browser = await getBrowser();
   const page = await browser.newPage();
   await page.setViewport({ width: 1600, height: 900 });
   try {
-    return await doLogin(page, username, password);
+    const result = await doLogin(page, username, password);
+    if (result.ok) {
+      const cookies = await page.cookies();
+      return { ok: true, cookies };
+    }
+    return result;
   } finally {
     await page.close().catch(() => {});
     await browser.close().catch(() => {});
@@ -655,8 +660,12 @@ function isLoginUrl(url: string) {
 async function ensureAuthenticated(
   page: Page,
   username: string,
-  password: string
+  password: string,
+  sessionCookies?: Cookie[]
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (sessionCookies?.length) {
+    await page.setCookie(...sessionCookies);
+  }
   await safeGoto(page, `${BASE}/app/ticket/list`);
 
   // Angular boots after domcontentloaded and may redirect to login — wait for
@@ -728,7 +737,11 @@ async function pLimit<T, R>(
 
 // ── Main export ───────────────────────────────────────────────────────────────
 
-export async function scrape(username: string, password: string, targetDateFrom?: string): Promise<void> {
+export async function scrape(username: string, password: string, targetDateFrom?: string, sessionCookies?: Cookie[]): Promise<void> {
+  // Write progress before launching the browser so the dashboard detects it immediately
+  const startedAt = new Date().toISOString();
+  saveProgress({ phase: "Launching browser", current: 0, total: 1, startedAt });
+
   const browser = await getBrowser();
   const page = await browser.newPage();
   await page.setViewport({ width: 1600, height: 900 });
@@ -742,8 +755,6 @@ export async function scrape(username: string, password: string, targetDateFrom?
     moduleBreakdown: [], severityBreakdown: [], recentTickets: [],
   };
 
-  const startedAt = new Date().toISOString();
-
   try {
     // Build a map of previously enriched creation times so we never open a
     // detail page for a ticket we've already resolved. On the very first scrape
@@ -756,7 +767,7 @@ export async function scrape(username: string, password: string, targetDateFrom?
     );
 
     saveProgress({ phase: "Authenticating", current: 0, total: 1, startedAt });
-    const auth = await ensureAuthenticated(page, username, password);
+    const auth = await ensureAuthenticated(page, username, password, sessionCookies);
     if (!auth.ok) throw new Error(auth.error);
     saveProgress({ phase: "Authenticating", current: 1, total: 1, startedAt });
 
