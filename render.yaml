@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: sf-dashboard
+    runtime: docker
+    plan: free
+    dockerfilePath: SF-Dashboard/Dockerfile
+    dockerContext: SF-Dashboard
+    envVars:
+      - key: CHROMIUM_PATH
+        value: /usr/bin/google-chrome-stable
+      - key: DATA_DIR
+        value: /tmp/sf-data
+      - key: NODE_ENV
+        value: production
+      - key: UPSTASH_REDIS_REST_URL
+        sync: false
+      - key: UPSTASH_REDIS_REST_TOKEN
+        sync: false
