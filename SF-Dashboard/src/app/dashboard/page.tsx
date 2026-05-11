@@ -1447,12 +1447,7 @@ export default function Dashboard() {
   const displayTotals = useMemo(() => {
     const count = (s: string) => filteredRecent.filter((t) => t.status === s).length;
     const unresolved = filteredRecent.filter((t) => UNRESOLVED_STATUSES.has(t.status)).length;
-    if (!isFiltered) {
-      return cache?.totals
-        ? { ...cache.totals, unresolved, unresponded: filteredUnresponded.length }
-        : null;
-    }
-    return {
+    const computed = {
       all:         filteredRecent.length,
       open:        count("Open"),
       responded:   count("Responded"),
@@ -1463,10 +1458,17 @@ export default function Dashboard() {
       unresolved,
       unresponded: filteredUnresponded.length,
     };
+    if (!isFiltered) {
+      // Fall back to computed totals when statistics page returned zeros
+      const cached = cache?.totals;
+      if (!cached || cached.all === 0) return computed;
+      return { ...cached, unresolved, unresponded: filteredUnresponded.length };
+    }
+    return computed;
   }, [isFiltered, cache, filteredRecent, filteredUnresponded, UNRESOLVED_STATUSES]);
 
   const displayModuleBreakdown = useMemo<ModuleRow[]>(() => {
-    if (!isFiltered) return cache?.moduleBreakdown ?? [];
+    if (!isFiltered && cache?.moduleBreakdown?.length) return cache.moduleBreakdown;
     const groups: Record<string, ModuleRow> = {};
     filteredRecent.forEach((t) => {
       const key = t.module || t.project || "Other";
@@ -1489,7 +1491,7 @@ export default function Dashboard() {
   }, [isFiltered, filteredRecent, cache]);
 
   const displaySeverityBreakdown = useMemo<SeverityRow[]>(() => {
-    if (!isFiltered) return cache?.severityBreakdown ?? [];
+    if (!isFiltered && cache?.severityBreakdown?.length) return cache.severityBreakdown;
     const ORDER = ["Critical", "High", "Medium", "Low"];
     const groups: Record<string, SeverityRow> = {};
     ORDER.forEach((s) => { groups[s] = { severity: s, open: 0, responded: 0, reopen: 0, fixed: 0, closed: 0, cancelled: 0 }; });

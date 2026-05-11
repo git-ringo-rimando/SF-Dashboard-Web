@@ -231,6 +231,15 @@ async function extractStatistics(page: Page): Promise<{
 }> {
   await gotoAndWait(page, `${BASE}/app/ticket/statistic`, "table");
 
+  // Wait for Angular to populate the table with actual numeric data
+  await page.waitForFunction(
+    () => {
+      const cell = document.querySelector("table tbody tr td:nth-child(2)");
+      return !!cell && /\d/.test(cell.textContent ?? "");
+    },
+    { timeout: 60000 }
+  ).catch(() => {});
+
   return retryOnDetach(() => page.evaluate(() => {
     const num = (s: string | undefined) => parseInt(s ?? "0") || 0;
     const periodInput =
