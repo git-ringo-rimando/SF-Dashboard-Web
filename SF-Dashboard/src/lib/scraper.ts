@@ -2,6 +2,8 @@ import puppeteer, { type Browser, type Page } from "puppeteer";
 import {
   saveCache,
   loadCache,
+  saveProgress,
+  clearProgress,
   type DashboardCache,
   type TicketRow,
   type ModuleRow,
@@ -303,7 +305,7 @@ async function waitForTicketData(page: Page, timeout = 90000): Promise<void> {
   ).catch(() => {});
 }
 
-async function extractTicketList(page: Page, targetDateFrom?: string): Promise<RecentTicket[]> {
+async function extractTicketList(page: Page, startedAt: string, targetDateFrom?: string): Promise<RecentTicket[]> {
   if (!page.url().includes("/app/ticket/list")) {
     await safeGoto(page, `${BASE}/app/ticket/list`);
   }
@@ -313,6 +315,7 @@ async function extractTicketList(page: Page, targetDateFrom?: string): Promise<R
   const MAX_PAGES = targetDateFrom ? 200 : 75;
 
   for (let p = 0; p < MAX_PAGES; p++) {
+    saveProgress({ phase: "Fetching tickets", current: p + 1, total: MAX_PAGES, startedAt });
     // Recover from detached frame caused by Angular re-renders during pagination
     let pageResult: { tickets: RecentTicket[]; hasNext: boolean; firstTicketNo: string };
     try {
@@ -718,6 +721,8 @@ export async function scrape(username: string, password: string, targetDateFrom?
     moduleBreakdown: [], severityBreakdown: [], recentTickets: [],
   };
 
+  const startedAt = new Date().toISOString();
+
   try {
     // Build a map of previously enriched creation times so we never open a
     // detail page for a ticket we've already resolved. On the very first scrape
@@ -729,8 +734,10 @@ export async function scrape(username: string, password: string, targetDateFrom?
         .map((t) => [t.ticketNo, t.createdDate])
     );
 
+    saveProgress({ phase: "Authenticating", current: 0, total: 1, startedAt });
     const auth = await ensureAuthenticated(page, username, password);
     if (!auth.ok) throw new Error(auth.error);
+    saveProgress({ phase: "Authenticating", current: 1, total: 1, startedAt });
 
     // Copy session cookies so parallel pages share the same auth
     const cookies = await page.cookies();
@@ -738,9 +745,15 @@ export async function scrape(username: string, password: string, targetDateFrom?
     // Ticket list paginates on the main page; partner dashboard + statistics
     // run concurrently on separate pages to cut total time significantly.
     const [recentTickets, partnerData, statData] = await Promise.all([
-      extractTicketList(page, targetDateFrom),
-      runOnNewPage(browser, cookies, extractPartnerDashboard),
-      runOnNewPage(browser, cookies, extractStatistics),
+      extractTicketList(page, startedAt, targetDateFrom),
+      runOnNewPage(browser, cookies, (p) => {
+        saveProgress({ phase: "Fetching partner dashboard", current: 0, total: 1, startedAt });
+        return extractPartnerDashboard(p);
+      }),
+      runOnNewPage(browser, cookies, (p) => {
+        saveProgress({ phase: "Fetching statistics", current: 0, total: 1, startedAt });
+        return extractStatistics(p);
+      }),
     ]);
 
     // Apply previously enriched times before deciding what still needs a detail fetch.
@@ -756,15 +769,21 @@ export async function scrape(username: string, password: string, targetDateFrom?
       .slice(0, 20)
       .filter((t) => !t.createdDate.includes(":"));
     if (needsEnrichment.length > 0) {
-      const times = await pLimit(needsEnrichment, 5, (t) =>
-        runOnNewPage(browser, cookies, (p) => fetchCreatedTime(p, t.ticketNo))
-      );
+      let enriched = 0;
+      saveProgress({ phase: "Enriching ticket times", current: 0, total: needsEnrichment.length, startedAt });
+      const times = await pLimit(needsEnrichment, 5, async (t) => {
+        const result = await runOnNewPage(browser, cookies, (p) => fetchCreatedTime(p, t.ticketNo));
+        saveProgress({ phase: "Enriching ticket times", current: ++enriched, total: needsEnrichment.length, startedAt });
+        return result;
+      });
       const timeMap = new Map(needsEnrichment.map((t, i) => [t.ticketNo, times[i]]));
       for (const ticket of recentTickets) {
         const t = timeMap.get(ticket.ticketNo);
         if (t) ticket.createdDate = t;
       }
     }
+
+    saveProgress({ phase: "Saving", current: 1, total: 1, startedAt });
 
     await saveCache({
       ...empty,
@@ -780,6 +799,7 @@ export async function scrape(username: string, password: string, targetDateFrom?
   } catch (e) {
     await saveCache({ ...empty, error: e instanceof Error ? e.message : String(e) });
   } finally {
+    clearProgress();
     await page.close();
   }
 }

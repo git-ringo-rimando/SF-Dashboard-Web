@@ -1101,6 +1101,7 @@ export default function Dashboard() {
   const [cache, setCache]       = useState<DashboardCache | null>(null);
   const [loading, setLoading]   = useState(true);
   const [scraping, setScraping] = useState(false);
+  const [scrapeProgress, setScrapeProgress] = useState<{ phase: string; current: number; total: number } | null>(null);
   const [nextAt, setNextAt]     = useState(Date.now() + REFRESH_MS);
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters]   = useState<Filters>(() => {
@@ -1270,6 +1271,24 @@ export default function Dashboard() {
   }, [triggerScrape]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  // Poll /api/progress every 2s while a scrape is running
+  useEffect(() => {
+    if (!scraping) { setScrapeProgress(null); return; }
+    let cancelled = false;
+    const tick = async () => {
+      if (cancelled) return;
+      try {
+        const res = await fetch("/api/progress");
+        const p = await res.json();
+        if (!cancelled) setScrapeProgress(p ?? null);
+      } catch {}
+      if (!cancelled) setTimeout(tick, 2000);
+    };
+    tick();
+    return () => { cancelled = true; };
+  }, [scraping]);
+
   useEffect(() => {
     scheduleRefresh();
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
@@ -1852,6 +1871,32 @@ export default function Dashboard() {
       </header>
 
       <main className="max-w-screen-2xl mx-auto px-6 py-8 space-y-6">
+
+        {/* Scrape progress bar */}
+        {scraping && (
+          <div className="rounded-xl border border-teal-800 bg-teal-950/40 px-4 py-3 space-y-2">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-teal-300 font-medium">
+                {scrapeProgress?.phase ?? "Starting…"}
+              </span>
+              {scrapeProgress && scrapeProgress.total > 1 && (
+                <span className="text-teal-500 tabular-nums">
+                  {scrapeProgress.current} / {scrapeProgress.total}
+                </span>
+              )}
+            </div>
+            <div className="w-full h-1.5 bg-teal-900/60 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-teal-400 rounded-full transition-all duration-500"
+                style={{
+                  width: scrapeProgress && scrapeProgress.total > 0
+                    ? `${Math.min(100, (scrapeProgress.current / scrapeProgress.total) * 100)}%`
+                    : "5%",
+                }}
+              />
+            </div>
+          </div>
+        )}
 
         {/* Status bar */}
         {cache && (

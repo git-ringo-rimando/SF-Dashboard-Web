@@ -240,11 +240,42 @@ export async function loadTags(): Promise<TagMap> {
   }
 }
 
+// ── Scrape progress ───────────────────────────────────────────────────────────
+
+export interface ScrapeProgress {
+  phase: string;
+  current: number;
+  total: number;
+  startedAt: string;
+}
+
+const PROGRESS_FILE = path.join(DATA_DIR, "progress.json");
+
+export function saveProgress(p: ScrapeProgress): void {
+  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+  fs.writeFileSync(PROGRESS_FILE, JSON.stringify(p), "utf8");
+  redisSet("sf:progress", JSON.stringify(p), 3600).catch(() => {});
+}
+
+export function clearProgress(): void {
+  try { if (fs.existsSync(PROGRESS_FILE)) fs.unlinkSync(PROGRESS_FILE); } catch {}
+  redisDel("sf:progress").catch(() => {});
+}
+
+export async function loadProgress(): Promise<ScrapeProgress | null> {
+  if (fs.existsSync(PROGRESS_FILE)) {
+    try { return JSON.parse(fs.readFileSync(PROGRESS_FILE, "utf8")); } catch {}
+  }
+  const raw = await redisGet("sf:progress");
+  if (!raw) return null;
+  try { return JSON.parse(raw) as ScrapeProgress; } catch { return null; }
+}
+
 // ── Sign-out ──────────────────────────────────────────────────────────────────
 
 export async function clearAllData(): Promise<void> {
-  for (const file of [CREDS_FILE, CACHE_FILE, TAGS_FILE]) {
+  for (const file of [CREDS_FILE, CACHE_FILE, TAGS_FILE, PROGRESS_FILE]) {
     try { if (fs.existsSync(file)) fs.unlinkSync(file); } catch {}
   }
-  await redisDel("sf:creds", "sf:cache", "sf:tags");
+  await redisDel("sf:creds", "sf:cache", "sf:tags", "sf:progress");
 }
