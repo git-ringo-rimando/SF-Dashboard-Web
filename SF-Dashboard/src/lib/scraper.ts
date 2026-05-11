@@ -328,10 +328,12 @@ async function waitForTicketData(page: Page, timeout = 90000): Promise<void> {
 }
 
 async function extractTicketList(page: Page, startedAt: string, targetDateFrom?: string, onFirstPage?: (tickets: RecentTicket[]) => Promise<void>): Promise<RecentTicket[]> {
-  if (!page.url().includes("/app/ticket/list")) {
-    await safeGoto(page, `${BASE}/app/ticket/list`);
-  }
+  // Always navigate fresh so we never use a partially-rendered page left by
+  // ensureAuthenticated (which resolves as soon as any row appears — not all rows).
+  await safeGoto(page, `${BASE}/app/ticket/list`);
   await waitForTicketData(page);
+  // Give Angular a moment to finish rendering all rows after the first one appears
+  await new Promise((r) => setTimeout(r, 1500));
 
   const all: RecentTicket[] = [];
   const MAX_PAGES = targetDateFrom ? 200 : 75;
