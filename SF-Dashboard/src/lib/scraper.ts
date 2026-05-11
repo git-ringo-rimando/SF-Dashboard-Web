@@ -1,6 +1,7 @@
 import puppeteer, { type Browser, type Page } from "puppeteer";
 import {
   saveCache,
+  loadCache,
   type DashboardCache,
   type TicketRow,
   type ModuleRow,
@@ -718,6 +719,16 @@ export async function scrape(username: string, password: string, targetDateFrom?
   };
 
   try {
+    // Build a map of previously enriched creation times so we never open a
+    // detail page for a ticket we've already resolved. On the very first scrape
+    // this map is empty; on subsequent scrapes it short-circuits most lookups.
+    const existingCache = await loadCache();
+    const knownTimes = new Map<string, string>(
+      (existingCache?.recentTickets ?? [])
+        .filter((t) => t.createdDate.includes(":"))
+        .map((t) => [t.ticketNo, t.createdDate])
+    );
+
     const auth = await ensureAuthenticated(page, username, password);
     if (!auth.ok) throw new Error(auth.error);
 
@@ -732,9 +743,15 @@ export async function scrape(username: string, password: string, targetDateFrom?
       runOnNewPage(browser, cookies, extractStatistics),
     ]);
 
-    // Enrich creation times only for tickets where the list page returned a
-    // plain date (no colon = no time component) — avoids opening detail pages
-    // for tickets that already have a full datetime from the title attribute.
+    // Apply previously enriched times before deciding what still needs a detail fetch.
+    for (const ticket of recentTickets) {
+      const known = knownTimes.get(ticket.ticketNo);
+      if (known) ticket.createdDate = known;
+    }
+
+    // Only open detail pages for tickets still missing a time component.
+    // On the initial scrape this covers up to 20 tickets; on subsequent scrapes
+    // only brand-new tickets that haven't been seen before will be fetched.
     const needsEnrichment = recentTickets
       .slice(0, 20)
       .filter((t) => !t.createdDate.includes(":"));
