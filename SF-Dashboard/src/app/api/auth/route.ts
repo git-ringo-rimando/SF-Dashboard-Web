@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { saveCredentials, hasCredentials, loadCredentials } from "@/lib/store";
+import { saveCredentials, loadCredentials, clearAllData } from "@/lib/store";
 import { verifyLogin, scrape } from "@/lib/scraper";
 
 export async function POST(req: NextRequest) {
@@ -27,14 +27,6 @@ export async function GET() {
 }
 
 export async function DELETE() {
-  try {
-    const fs = await import("fs");
-    const path = await import("path");
-    const DATA_DIR = process.env.DATA_DIR ?? path.join(process.cwd(), "data");
-    for (const file of ["credentials.enc", "cache.json", "tags.json"]) {
-      const p = path.join(DATA_DIR, file);
-      if (fs.existsSync(p)) fs.unlinkSync(p);
-    }
-  } catch {}
+  await clearAllData();
   return NextResponse.json({ ok: true });
 }

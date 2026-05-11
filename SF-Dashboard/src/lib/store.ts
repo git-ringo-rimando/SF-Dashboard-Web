@@ -168,6 +168,20 @@ async function redisSet(key: string, value: string, ttlSeconds = 86400): Promise
   }
 }
 
+async function redisDel(...keys: string[]): Promise<void> {
+  if (!REDIS_URL || !REDIS_TOKEN || !keys.length) return;
+  try {
+    await fetch(REDIS_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${REDIS_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(["DEL", ...keys]),
+    });
+  } catch {}
+}
+
 function writeLocal(file: string, content: string): void {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
   fs.writeFileSync(file, content, "utf8");
@@ -224,4 +238,13 @@ export async function loadTags(): Promise<TagMap> {
   } catch {
     return {};
   }
+}
+
+// ── Sign-out ──────────────────────────────────────────────────────────────────
+
+export async function clearAllData(): Promise<void> {
+  for (const file of [CREDS_FILE, CACHE_FILE, TAGS_FILE]) {
+    try { if (fs.existsSync(file)) fs.unlinkSync(file); } catch {}
+  }
+  await redisDel("sf:creds", "sf:cache", "sf:tags");
 }
