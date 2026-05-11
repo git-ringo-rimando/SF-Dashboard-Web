@@ -16,6 +16,7 @@ ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV CHROMIUM_PATH=/usr/bin/google-chrome-stable
 ENV DATA_DIR=/tmp/sf-data
 ENV NODE_ENV=production
+ENV NODE_OPTIONS=--max-old-space-size=512
 
 WORKDIR /app
 COPY package*.json ./
