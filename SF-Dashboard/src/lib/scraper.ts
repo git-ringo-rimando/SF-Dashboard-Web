@@ -332,8 +332,17 @@ async function extractTicketList(page: Page, startedAt: string, targetDateFrom?:
   // ensureAuthenticated (which resolves as soon as any row appears — not all rows).
   await safeGoto(page, `${BASE}/app/ticket/list`);
   await waitForTicketData(page);
-  // Give Angular a moment to finish rendering all rows after the first one appears
-  await new Promise((r) => setTimeout(r, 1500));
+  // Poll until the visible row count stops changing — Angular renders rows progressively
+  // and the first row appearing does not guarantee all rows are in the DOM yet.
+  let prevCount = -1;
+  for (let i = 0; i < 8; i++) {
+    const count: number = await page.evaluate(
+      () => document.querySelectorAll("table tbody tr").length
+    );
+    if (count > 0 && count === prevCount) break;
+    prevCount = count;
+    await new Promise((r) => setTimeout(r, 400));
+  }
 
   const all: RecentTicket[] = [];
   const MAX_PAGES = targetDateFrom ? 200 : 75;
@@ -785,11 +794,12 @@ export async function scrape(username: string, password: string, targetDateFrom?
       await saveCache({ ...empty, scrapedAt: new Date().toISOString(), recentTickets: firstPage });
     });
 
-    saveProgress({ phase: "Fetching partner dashboard", current: 0, total: 1, startedAt });
-    const partnerData = await runOnNewPage(browser, cookies, extractPartnerDashboard);
-
-    saveProgress({ phase: "Fetching statistics", current: 0, total: 1, startedAt });
-    const statData = await runOnNewPage(browser, cookies, extractStatistics);
+    // Partner dashboard and statistics are independent — run in parallel
+    saveProgress({ phase: "Fetching dashboard & statistics", current: 0, total: 1, startedAt });
+    const [partnerData, statData] = await Promise.all([
+      runOnNewPage(browser, cookies, extractPartnerDashboard),
+      runOnNewPage(browser, cookies, extractStatistics),
+    ]);
 
     // Apply previously enriched times before deciding what still needs a detail fetch.
     for (const ticket of recentTickets) {
@@ -806,7 +816,7 @@ export async function scrape(username: string, password: string, targetDateFrom?
     if (needsEnrichment.length > 0) {
       let enriched = 0;
       saveProgress({ phase: "Enriching ticket times", current: 0, total: needsEnrichment.length, startedAt });
-      const times = await pLimit(needsEnrichment, 2, async (t) => {
+      const times = await pLimit(needsEnrichment, 4, async (t) => {
         const result = await runOnNewPage(browser, cookies, (p) => fetchCreatedTime(p, t.ticketNo));
         saveProgress({ phase: "Enriching ticket times", current: ++enriched, total: needsEnrichment.length, startedAt });
         return result;
