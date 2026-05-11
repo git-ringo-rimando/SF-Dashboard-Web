@@ -47,7 +47,7 @@ async function safeGoto(page: Page, url: string, timeout = 120000): Promise<void
   const RETRYABLE = /Navigation timeout|net::ERR_|TimeoutError/i;
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      await page.goto(url, { waitUntil: "commit" as "load", timeout });
+      await page.goto(url, { waitUntil: "domcontentloaded", timeout });
       return;
     } catch (e) {
       const msg = String(e);
