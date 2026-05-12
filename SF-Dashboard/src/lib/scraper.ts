@@ -334,7 +334,7 @@ async function waitForTicketData(page: Page, timeout = 90000): Promise<void> {
   ).catch(() => {});
 }
 
-async function extractTicketList(page: Page, startedAt: string, targetDateFrom?: string, onFirstPage?: (tickets: RecentTicket[]) => Promise<void>): Promise<RecentTicket[]> {
+async function extractTicketList(page: Page, username: string, startedAt: string, targetDateFrom?: string, onFirstPage?: (tickets: RecentTicket[]) => Promise<void>): Promise<RecentTicket[]> {
   // Always navigate fresh so we never use a partially-rendered page left by
   // ensureAuthenticated (which resolves as soon as any row appears — not all rows).
   await safeGoto(page, `${BASE}/app/ticket/list`);
@@ -355,7 +355,7 @@ async function extractTicketList(page: Page, startedAt: string, targetDateFrom?:
   const MAX_PAGES = targetDateFrom ? 200 : 75;
 
   for (let p = 0; p < MAX_PAGES; p++) {
-    saveProgress({ phase: "Fetching tickets", current: p + 1, total: MAX_PAGES, startedAt });
+    saveProgress({ phase: "Fetching tickets", current: p + 1, total: MAX_PAGES, startedAt }, username);
     // Recover from detached frame caused by Angular re-renders during pagination
     let pageResult: { tickets: RecentTicket[]; hasNext: boolean; firstTicketNo: string };
     try {
@@ -759,7 +759,7 @@ async function pLimit<T, R>(
 export async function scrape(username: string, password: string, targetDateFrom?: string, sessionCookies?: Cookie[]): Promise<void> {
   // Write progress before launching the browser so the dashboard detects it immediately
   const startedAt = new Date().toISOString();
-  saveProgress({ phase: "Launching browser", current: 0, total: 1, startedAt });
+  saveProgress({ phase: "Launching browser", current: 0, total: 1, startedAt }, username);
 
   const browser = await getBrowser();
   const page = await newPage(browser);
@@ -774,29 +774,28 @@ export async function scrape(username: string, password: string, targetDateFrom?
   };
 
   try {
-    saveProgress({ phase: "Authenticating", current: 0, total: 1, startedAt });
+    saveProgress({ phase: "Authenticating", current: 0, total: 1, startedAt }, username);
     const auth = await ensureAuthenticated(page, username, password, sessionCookies);
     if (!auth.ok) throw new Error(auth.error);
-    saveProgress({ phase: "Authenticating", current: 1, total: 1, startedAt });
+    saveProgress({ phase: "Authenticating", current: 1, total: 1, startedAt }, username);
 
     // Copy session cookies so parallel pages share the same auth
     const cookies = await page.cookies();
 
     // Run sequentially to keep peak memory low on constrained hosts.
-    saveProgress({ phase: "Fetching tickets", current: 0, total: 1, startedAt });
-    const recentTickets = await extractTicketList(page, startedAt, targetDateFrom, async (firstPage) => {
-      // Save a partial cache after the first page so the dashboard can render immediately
-      await saveCache({ ...empty, scrapedAt: new Date().toISOString(), recentTickets: firstPage });
+    saveProgress({ phase: "Fetching tickets", current: 0, total: 1, startedAt }, username);
+    const recentTickets = await extractTicketList(page, username, startedAt, targetDateFrom, async (firstPage) => {
+      await saveCache({ ...empty, scrapedAt: new Date().toISOString(), recentTickets: firstPage }, username);
     });
 
     // Partner dashboard and statistics are independent — run in parallel
-    saveProgress({ phase: "Fetching dashboard & statistics", current: 0, total: 1, startedAt });
+    saveProgress({ phase: "Fetching dashboard & statistics", current: 0, total: 1, startedAt }, username);
     const [partnerData, statData] = await Promise.all([
       runOnNewPage(browser, cookies, extractPartnerDashboard),
       runOnNewPage(browser, cookies, extractStatistics),
     ]);
 
-    saveProgress({ phase: "Saving", current: 1, total: 1, startedAt });
+    saveProgress({ phase: "Saving", current: 1, total: 1, startedAt }, username);
 
     await saveCache({
       ...empty,
@@ -808,11 +807,11 @@ export async function scrape(username: string, password: string, targetDateFrom?
       moduleBreakdown: statData.moduleBreakdown,
       severityBreakdown: statData.severityBreakdown,
       recentTickets,
-    });
+    }, username);
   } catch (e) {
-    await saveCache({ ...empty, error: e instanceof Error ? e.message : String(e) });
+    await saveCache({ ...empty, error: e instanceof Error ? e.message : String(e) }, username);
   } finally {
-    clearProgress();
+    clearProgress(username);
     await page.close();
     await browser.close();
   }

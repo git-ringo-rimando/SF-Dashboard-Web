@@ -3,11 +3,8 @@ import path from "path";
 import crypto from "crypto";
 
 const DATA_DIR = process.env.DATA_DIR ?? path.join(process.cwd(), "data");
-const CREDS_FILE = path.join(DATA_DIR, "credentials.enc");
-const CACHE_FILE = path.join(DATA_DIR, "cache.json");
 
 const ALGORITHM = "aes-256-gcm";
-// Platform-independent secret — set CREDS_SECRET env var in production.
 const SECRET = crypto
   .createHash("sha256")
   .update(process.env.CREDS_SECRET ?? "sf-dashboard-app-secret")
@@ -31,34 +28,52 @@ function decrypt(encoded: string): string {
   return Buffer.concat([decipher.update(enc), decipher.final()]).toString("utf8");
 }
 
-export async function saveCredentials(username: string, password: string): Promise<void> {
-  const encrypted = encrypt(JSON.stringify({ username, password }));
-  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-  fs.writeFileSync(CREDS_FILE, encrypted, "utf8");
-  await redisSet("sf:creds", encrypted, 90 * 86400);
+// Sanitize username for use as a directory name / Redis key segment
+function sanitize(username: string): string {
+  return username.replace(/[^a-zA-Z0-9@._-]/g, "_").slice(0, 100);
 }
 
-export async function loadCredentials(): Promise<{ username: string; password: string } | null> {
-  if (fs.existsSync(CREDS_FILE)) {
-    try { return JSON.parse(decrypt(fs.readFileSync(CREDS_FILE, "utf8"))); } catch {}
+// ── Per-user file paths ───────────────────────────────────────────────────────
+
+function userDir(username: string)      { return path.join(DATA_DIR, sanitize(username)); }
+function credsFile(username: string)    { return path.join(userDir(username), "credentials.enc"); }
+function cacheFile(username: string)    { return path.join(userDir(username), "cache.json"); }
+function tagsFile(username: string)     { return path.join(userDir(username), "tags.json"); }
+function progressFile(username: string) { return path.join(userDir(username), "progress.json"); }
+
+function writeLocal(file: string, content: string): void {
+  const dir = path.dirname(file);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(file, content, "utf8");
+}
+
+// ── Credentials ───────────────────────────────────────────────────────────────
+
+export async function saveCredentials(username: string, password: string): Promise<void> {
+  const encrypted = encrypt(JSON.stringify({ username, password }));
+  writeLocal(credsFile(username), encrypted);
+  await redisSet(`sf:creds:${sanitize(username)}`, encrypted, 90 * 86400);
+}
+
+export async function loadCredentials(username: string): Promise<{ username: string; password: string } | null> {
+  const file = credsFile(username);
+  if (fs.existsSync(file)) {
+    try { return JSON.parse(decrypt(fs.readFileSync(file, "utf8"))); } catch {}
   }
-  // Local file missing (container restart) — fall back to Redis
-  const raw = await redisGet("sf:creds");
+  const raw = await redisGet(`sf:creds:${sanitize(username)}`);
   if (!raw) return null;
   try {
     const creds = JSON.parse(decrypt(raw)) as { username: string; password: string };
-    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-    fs.writeFileSync(CREDS_FILE, raw, "utf8");
+    writeLocal(file, raw);
     return creds;
   } catch {
     return null;
   }
 }
 
-export async function hasCredentials(): Promise<boolean> {
-  if (fs.existsSync(CREDS_FILE)) return true;
-  const raw = await redisGet("sf:creds");
-  return !!raw;
+export async function hasCredentials(username: string): Promise<boolean> {
+  if (fs.existsSync(credsFile(username))) return true;
+  return !!(await redisGet(`sf:creds:${sanitize(username)}`));
 }
 
 // ── Data shapes ──────────────────────────────────────────────────────────────
@@ -163,9 +178,7 @@ async function redisSet(key: string, value: string, ttlSeconds = 86400): Promise
       },
       body: JSON.stringify(["SET", key, value, "EX", ttlSeconds]),
     });
-  } catch {
-    // best-effort — local file is the source of truth within the same session
-  }
+  } catch {}
 }
 
 async function redisDel(...keys: string[]): Promise<void> {
@@ -182,40 +195,36 @@ async function redisDel(...keys: string[]): Promise<void> {
   } catch {}
 }
 
-function writeLocal(file: string, content: string): void {
-  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-  fs.writeFileSync(file, content, "utf8");
-}
-
 // ── Cache ────────────────────────────────────────────────────────────────────
 
-// In-process cache so repeated /api/data polls during scraping skip the disk read.
-// Invalidated immediately whenever saveCache writes new data.
-let _cacheMemory: DashboardCache | null | undefined = undefined; // undefined = not loaded yet
+// In-process cache keyed by username — skips disk on repeated /api/data polls.
+const _cacheMemory = new Map<string, DashboardCache | null | undefined>();
 
-export async function saveCache(data: DashboardCache): Promise<void> {
-  _cacheMemory = data; // keep in-process cache in sync
+export async function saveCache(data: DashboardCache, username: string): Promise<void> {
+  _cacheMemory.set(username, data);
   const json = JSON.stringify(data);
-  writeLocal(CACHE_FILE, json);
-  await redisSet("sf:cache", json);
+  writeLocal(cacheFile(username), json);
+  await redisSet(`sf:cache:${sanitize(username)}`, json);
 }
 
-export async function loadCache(): Promise<DashboardCache | null> {
-  if (_cacheMemory !== undefined) return _cacheMemory;
-  if (fs.existsSync(CACHE_FILE)) {
+export async function loadCache(username: string): Promise<DashboardCache | null> {
+  const mem = _cacheMemory.get(username);
+  if (mem !== undefined) return mem;
+
+  const file = cacheFile(username);
+  if (fs.existsSync(file)) {
     try {
-      const data = JSON.parse(fs.readFileSync(CACHE_FILE, "utf8")) as DashboardCache;
-      _cacheMemory = data;
+      const data = JSON.parse(fs.readFileSync(file, "utf8")) as DashboardCache;
+      _cacheMemory.set(username, data);
       return data;
     } catch {}
   }
-  // Local file missing (e.g. after Render redeploy) — fall back to Redis
-  const raw = await redisGet("sf:cache");
-  if (!raw) { _cacheMemory = null; return null; }
+  const raw = await redisGet(`sf:cache:${sanitize(username)}`);
+  if (!raw) { _cacheMemory.set(username, null); return null; }
   try {
     const data = JSON.parse(raw) as DashboardCache;
-    writeLocal(CACHE_FILE, raw);
-    _cacheMemory = data;
+    writeLocal(file, raw);
+    _cacheMemory.set(username, data);
     return data;
   } catch {
     return null;
@@ -227,24 +236,22 @@ export async function loadCache(): Promise<DashboardCache | null> {
 export type ProductTag = "Sunfish 6" | "Sunfish 7" | "Greatday";
 export type TagMap = Record<string, ProductTag>;
 
-const TAGS_FILE = path.join(DATA_DIR, "tags.json");
-
-export async function saveTags(tags: TagMap): Promise<void> {
+export async function saveTags(tags: TagMap, username: string): Promise<void> {
   const json = JSON.stringify(tags, null, 2);
-  writeLocal(TAGS_FILE, json);
-  await redisSet("sf:tags", json, 7 * 86400); // 7-day TTL — tags change infrequently
+  writeLocal(tagsFile(username), json);
+  await redisSet(`sf:tags:${sanitize(username)}`, json, 7 * 86400);
 }
 
-export async function loadTags(): Promise<TagMap> {
-  if (fs.existsSync(TAGS_FILE)) {
-    try { return JSON.parse(fs.readFileSync(TAGS_FILE, "utf8")); } catch {}
+export async function loadTags(username: string): Promise<TagMap> {
+  const file = tagsFile(username);
+  if (fs.existsSync(file)) {
+    try { return JSON.parse(fs.readFileSync(file, "utf8")); } catch {}
   }
-  // Fall back to Redis
-  const raw = await redisGet("sf:tags");
+  const raw = await redisGet(`sf:tags:${sanitize(username)}`);
   if (!raw) return {};
   try {
     const tags = JSON.parse(raw) as TagMap;
-    writeLocal(TAGS_FILE, raw);
+    writeLocal(file, raw);
     return tags;
   } catch {
     return {};
@@ -260,34 +267,34 @@ export interface ScrapeProgress {
   startedAt: string;
 }
 
-const PROGRESS_FILE = path.join(DATA_DIR, "progress.json");
-
-export function saveProgress(p: ScrapeProgress): void {
-  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-  fs.writeFileSync(PROGRESS_FILE, JSON.stringify(p), "utf8");
-  redisSet("sf:progress", JSON.stringify(p), 3600).catch(() => {});
+export function saveProgress(p: ScrapeProgress, username: string): void {
+  writeLocal(progressFile(username), JSON.stringify(p));
+  redisSet(`sf:progress:${sanitize(username)}`, JSON.stringify(p), 3600).catch(() => {});
 }
 
-export function clearProgress(): void {
-  try { if (fs.existsSync(PROGRESS_FILE)) fs.unlinkSync(PROGRESS_FILE); } catch {}
-  redisDel("sf:progress").catch(() => {});
+export function clearProgress(username: string): void {
+  const file = progressFile(username);
+  try { if (fs.existsSync(file)) fs.unlinkSync(file); } catch {}
+  redisDel(`sf:progress:${sanitize(username)}`).catch(() => {});
 }
 
-export async function loadProgress(): Promise<ScrapeProgress | null> {
-  if (fs.existsSync(PROGRESS_FILE)) {
-    try { return JSON.parse(fs.readFileSync(PROGRESS_FILE, "utf8")); } catch {}
+export async function loadProgress(username: string): Promise<ScrapeProgress | null> {
+  const file = progressFile(username);
+  if (fs.existsSync(file)) {
+    try { return JSON.parse(fs.readFileSync(file, "utf8")); } catch {}
   }
-  const raw = await redisGet("sf:progress");
+  const raw = await redisGet(`sf:progress:${sanitize(username)}`);
   if (!raw) return null;
   try { return JSON.parse(raw) as ScrapeProgress; } catch { return null; }
 }
 
 // ── Sign-out ──────────────────────────────────────────────────────────────────
 
-export async function clearAllData(): Promise<void> {
-  _cacheMemory = undefined;
-  for (const file of [CREDS_FILE, CACHE_FILE, TAGS_FILE, PROGRESS_FILE]) {
+export async function clearAllData(username: string): Promise<void> {
+  _cacheMemory.delete(username);
+  const s = sanitize(username);
+  for (const file of [credsFile(username), cacheFile(username), tagsFile(username), progressFile(username)]) {
     try { if (fs.existsSync(file)) fs.unlinkSync(file); } catch {}
   }
-  await redisDel("sf:creds", "sf:cache", "sf:tags", "sf:progress");
+  await redisDel(`sf:creds:${s}`, `sf:cache:${s}`, `sf:tags:${s}`, `sf:progress:${s}`);
 }
