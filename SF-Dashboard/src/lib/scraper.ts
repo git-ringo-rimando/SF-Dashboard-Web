@@ -774,16 +774,6 @@ export async function scrape(username: string, password: string, targetDateFrom?
   };
 
   try {
-    // Build a map of previously enriched creation times so we never open a
-    // detail page for a ticket we've already resolved. On the very first scrape
-    // this map is empty; on subsequent scrapes it short-circuits most lookups.
-    const existingCache = await loadCache();
-    const knownTimes = new Map<string, string>(
-      (existingCache?.recentTickets ?? [])
-        .filter((t) => t.createdDate.includes(":"))
-        .map((t) => [t.ticketNo, t.createdDate])
-    );
-
     saveProgress({ phase: "Authenticating", current: 0, total: 1, startedAt });
     const auth = await ensureAuthenticated(page, username, password, sessionCookies);
     if (!auth.ok) throw new Error(auth.error);
@@ -805,33 +795,6 @@ export async function scrape(username: string, password: string, targetDateFrom?
       runOnNewPage(browser, cookies, extractPartnerDashboard),
       runOnNewPage(browser, cookies, extractStatistics),
     ]);
-
-    // Apply previously enriched times before deciding what still needs a detail fetch.
-    for (const ticket of recentTickets) {
-      const known = knownTimes.get(ticket.ticketNo);
-      if (known) ticket.createdDate = known;
-    }
-
-    // Only open detail pages for tickets still missing a time component.
-    // On the initial scrape this covers up to 20 tickets; on subsequent scrapes
-    // only brand-new tickets that haven't been seen before will be fetched.
-    const needsEnrichment = recentTickets
-      .slice(0, 20)
-      .filter((t) => !t.createdDate.includes(":"));
-    if (needsEnrichment.length > 0) {
-      let enriched = 0;
-      saveProgress({ phase: "Enriching ticket times", current: 0, total: needsEnrichment.length, startedAt });
-      const times = await pLimit(needsEnrichment, 4, async (t) => {
-        const result = await runOnNewPage(browser, cookies, (p) => fetchCreatedTime(p, t.ticketNo));
-        saveProgress({ phase: "Enriching ticket times", current: ++enriched, total: needsEnrichment.length, startedAt });
-        return result;
-      });
-      const timeMap = new Map(needsEnrichment.map((t, i) => [t.ticketNo, times[i]]));
-      for (const ticket of recentTickets) {
-        const t = timeMap.get(ticket.ticketNo);
-        if (t) ticket.createdDate = t;
-      }
-    }
 
     saveProgress({ phase: "Saving", current: 1, total: 1, startedAt });
 
