@@ -5,7 +5,7 @@ services:
     plan: free
     envVars:
       - key: CHROMIUM_PATH
-        value: /usr/bin/chromium
+        value: /usr/bin/google-chrome-stable
       - key: DATA_DIR
         value: /tmp/sf-data
       - key: NODE_ENV

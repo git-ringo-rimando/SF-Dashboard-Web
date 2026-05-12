@@ -49,7 +49,7 @@ async function safeGoto(page: Page, url: string, timeout = 120000): Promise<void
   const RETRYABLE = /Navigation timeout|net::ERR_|TimeoutError/i;
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      await page.goto(url, { waitUntil: "domcontentloaded", timeout });
+      await page.goto(url, { waitUntil: "commit", timeout });
       return;
     } catch (e) {
       const msg = String(e);
@@ -93,14 +93,22 @@ async function retryOnDetach<T>(fn: () => Promise<T>, page: Page, retries = 3): 
   throw new Error("retryOnDetach: failed after all retries");
 }
 
+const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36";
+
+async function newPage(browser: Browser): Promise<Page> {
+  const page = await browser.newPage();
+  await page.setViewport({ width: 1600, height: 900 });
+  await page.setUserAgent(UA);
+  return page;
+}
+
 /** Run a scrape function on a fresh page sharing the same session cookies. */
 async function runOnNewPage<T>(
   browser: Browser,
   cookies: Awaited<ReturnType<Page["cookies"]>>,
   fn: (page: Page) => Promise<T>
 ): Promise<T> {
-  const page = await browser.newPage();
-  await page.setViewport({ width: 1600, height: 900 });
+  const page = await newPage(browser);
   if (cookies.length) await page.setCookie(...cookies);
   try {
     return await fn(page);
@@ -185,8 +193,7 @@ export async function verifyLogin(
   password: string
 ): Promise<{ ok: true; cookies: Cookie[] } | { ok: false; error: string }> {
   const browser = await getBrowser();
-  const page = await browser.newPage();
-  await page.setViewport({ width: 1600, height: 900 });
+  const page = await newPage(browser);
   try {
     const result = await doLogin(page, username, password);
     if (result.ok) {
@@ -448,8 +455,7 @@ export async function scrapeTicketDetail(
   ticketNo: string,
 ): Promise<TicketDetail | { error: string }> {
   const browser = await getBrowser();
-  const page = await browser.newPage();
-  await page.setViewport({ width: 1600, height: 900 });
+  const page = await newPage(browser);
 
   try {
     // Navigate then wait briefly for Angular's client-side router to settle.
@@ -756,8 +762,7 @@ export async function scrape(username: string, password: string, targetDateFrom?
   saveProgress({ phase: "Launching browser", current: 0, total: 1, startedAt });
 
   const browser = await getBrowser();
-  const page = await browser.newPage();
-  await page.setViewport({ width: 1600, height: 900 });
+  const page = await newPage(browser);
 
   const empty: DashboardCache = {
     scrapedAt: new Date().toISOString(),
