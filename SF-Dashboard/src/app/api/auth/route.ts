@@ -14,6 +14,7 @@ export async function POST(req: NextRequest) {
     result = await verifyLogin(username, password);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
+    console.error("[auth] verifyLogin threw:", msg);
     const friendly = /timeout|ECONNREFUSED|net::ERR/i.test(msg)
       ? "Could not reach sfsupport.dataon.com — check your connection and try again."
       : "An unexpected error occurred while verifying your credentials.";
