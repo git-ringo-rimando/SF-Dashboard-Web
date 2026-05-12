@@ -78,12 +78,11 @@ function toInputDate(d: Date) {
 }
 
 const DATE_PRESETS = [
-  { value: "today",           label: "Today" },
-  { value: "yesterday-today", label: "Yesterday – Today" },
-  { value: "yesterday",       label: "Yesterday" },
-  { value: "this-week",       label: "Last 7 Days" },
-  { value: "this-month",      label: "This Month" },
-  { value: "custom",          label: "Custom" },
+  { value: "today",      label: "Today" },
+  { value: "yesterday",  label: "Yesterday" },
+  { value: "this-week",  label: "Last 7 Days" },
+  { value: "this-month", label: "This Month" },
+  { value: "custom",     label: "Custom" },
 ] as const;
 
 function getPresetDates(preset: string): { from: string; to: string } {
@@ -101,8 +100,6 @@ function getPresetDates(preset: string): { from: string; to: string } {
   switch (preset) {
     case "today":
       return pastCutoff ? { from: todayStr, to: todayStr } : { from: offset(-1), to: todayStr };
-    case "yesterday-today":
-      return { from: offset(-1), to: todayStr };
     case "yesterday":
       return pastCutoff ? { from: offset(-1), to: todayStr } : { from: offset(-2), to: offset(-1) };
     case "this-week":
