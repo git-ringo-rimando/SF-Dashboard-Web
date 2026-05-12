@@ -95,7 +95,7 @@ function getPresetDates(preset: string): { from: string; to: string } {
   // Before 5:30PM: current work day spans [yesterday, today].
   // At/after 5:30PM: new work day just started, spans [today, today].
   const h = now.getHours(), m = now.getMinutes();
-  const pastCutoff = h > 17 || (h === 17 && m >= 30);
+  const pastCutoff = h > 17 || (h === 17 && m >= 31);
 
   switch (preset) {
     case "today":
