@@ -99,8 +99,13 @@ function getPresetDates(preset: string): { from: string; to: string } {
 
   switch (preset) {
     case "today":
-      return pastCutoff ? { from: todayStr, to: todayStr } : { from: offset(-1), to: todayStr };
+      // Work day = 5:31 PM (D-1) → 5:30 PM (D).
+      // Before 5:31 PM: current work day is [yesterday, today].
+      // At/after 5:31 PM: new work day just started, spans [today, tomorrow].
+      return pastCutoff ? { from: todayStr, to: offset(1) } : { from: offset(-1), to: todayStr };
     case "yesterday":
+      // Before 5:31 PM: previous work day is [2 days ago, yesterday].
+      // At/after 5:31 PM: previous work day is [yesterday, today].
       return pastCutoff ? { from: offset(-1), to: todayStr } : { from: offset(-2), to: offset(-1) };
     case "this-week":
       return { from: offset(-6), to: todayStr };
