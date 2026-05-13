@@ -86,33 +86,17 @@ const DATE_PRESETS = [
 ] as const;
 
 function getPresetDates(preset: string): { from: string; to: string } {
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
   const todayStr = toInputDate(today);
   const offset = (n: number) => { const d = new Date(today); d.setDate(today.getDate() + n); return toInputDate(d); };
 
-  // Work day = 5:30 PM (D-1) → 5:29 PM (D).
-  // Before 5:30PM: current work day spans [yesterday, today].
-  // At/after 5:30PM: new work day just started, spans [today, today].
-  const h = now.getHours(), m = now.getMinutes();
-  const pastCutoff = h > 17 || (h === 17 && m >= 31);
-
   switch (preset) {
-    case "today":
-      // Work day = 5:31 PM (D-1) → 5:30 PM (D).
-      // Before 5:31 PM: current work day is [yesterday, today].
-      // At/after 5:31 PM: new work day just started, spans [today, tomorrow].
-      return pastCutoff ? { from: todayStr, to: offset(1) } : { from: offset(-1), to: todayStr };
-    case "yesterday":
-      // Before 5:31 PM: previous work day is [2 days ago, yesterday].
-      // At/after 5:31 PM: previous work day is [yesterday, today].
-      return pastCutoff ? { from: offset(-1), to: todayStr } : { from: offset(-2), to: offset(-1) };
-    case "this-week":
-      return { from: offset(-6), to: todayStr };
-    case "this-month":
-      return { from: toInputDate(new Date(today.getFullYear(), today.getMonth(), 1)), to: todayStr };
-    default:
-      return { from: "", to: "" };
+    case "today":      return { from: todayStr, to: todayStr };
+    case "yesterday":  return { from: offset(-1), to: offset(-1) };
+    case "this-week":  return { from: offset(-6), to: todayStr };
+    case "this-month": return { from: toInputDate(new Date(today.getFullYear(), today.getMonth(), 1)), to: todayStr };
+    default:           return { from: "", to: "" };
   }
 }
 
