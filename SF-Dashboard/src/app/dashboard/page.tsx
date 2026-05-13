@@ -1135,12 +1135,20 @@ export default function Dashboard() {
   const [showNewTicketModal, setShowNewTicketModal] = useState(false);
   const [showOpenTicketsModal, setShowOpenTicketsModal] = useState(false);
   const [bannerDismissed, setBannerDismissed] = useState(false);
+  const [newReopenTickets, setNewReopenTickets] = useState<RecentTicket[]>([]);
+  const [showNewReopenModal, setShowNewReopenModal] = useState(false);
+  const [showReopenModal, setShowReopenModal] = useState(false);
+  const [reopenBannerDismissed, setReopenBannerDismissed] = useState(false);
   const prevOpenIdsRef = useRef<Set<string> | null>(null);
+  const prevReopenIdsRef = useRef<Set<string> | null>(null);
   const hasShownInitialModalRef = useRef(false);
+  const hasShownInitialReopenModalRef = useRef(false);
   const scrapingRef = useRef(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const openModalTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const newModalTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reopenModalTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const newReopenModalTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastActivityRef = useRef(Date.now());
 
   // Reset inactivity timer on any user interaction
@@ -1188,6 +1196,24 @@ export default function Dashboard() {
     return () => { if (newModalTimerRef.current) clearTimeout(newModalTimerRef.current); };
   }, [showNewTicketModal]);
 
+  // Auto-close reopen modal after 4 minutes
+  useEffect(() => {
+    if (reopenModalTimerRef.current) clearTimeout(reopenModalTimerRef.current);
+    if (showReopenModal) {
+      reopenModalTimerRef.current = setTimeout(() => setShowReopenModal(false), 4 * 60 * 1000);
+    }
+    return () => { if (reopenModalTimerRef.current) clearTimeout(reopenModalTimerRef.current); };
+  }, [showReopenModal]);
+
+  // Auto-close new reopen popup after 4 minutes
+  useEffect(() => {
+    if (newReopenModalTimerRef.current) clearTimeout(newReopenModalTimerRef.current);
+    if (showNewReopenModal) {
+      newReopenModalTimerRef.current = setTimeout(() => setShowNewReopenModal(false), 4 * 60 * 1000);
+    }
+    return () => { if (newReopenModalTimerRef.current) clearTimeout(newReopenModalTimerRef.current); };
+  }, [showNewReopenModal]);
+
   const fetchData = useCallback(async () => {
     const res = await fetch("/api/data");
     const json = await res.json();
@@ -1199,6 +1225,10 @@ export default function Dashboard() {
     if (!hasShownInitialModalRef.current && json.cache?.recentTickets?.some((t: RecentTicket) => t.status === "Open")) {
       hasShownInitialModalRef.current = true;
       setShowOpenTicketsModal(true);
+    }
+    if (!hasShownInitialReopenModalRef.current && json.cache?.recentTickets?.some((t: RecentTicket) => t.status === "Reopen")) {
+      hasShownInitialReopenModalRef.current = true;
+      setShowReopenModal(true);
     }
     // If a background scrape is already running (e.g. started after login), start polling
     try {
@@ -1232,6 +1262,30 @@ export default function Dashboard() {
     });
     setShowNewTicketModal(true);
 
+  }, [cache]);
+
+  // Detect new reopen tickets on each cache update
+  useEffect(() => {
+    if (!cache) return;
+    const reopenTickets = cache.recentTickets.filter((t) => t.status === "Reopen");
+    const currentIds = new Set(reopenTickets.map((t) => t.ticketNo));
+
+    if (prevReopenIdsRef.current === null) {
+      prevReopenIdsRef.current = currentIds;
+      return;
+    }
+
+    const brandNew = reopenTickets.filter((t) => !prevReopenIdsRef.current!.has(t.ticketNo));
+    prevReopenIdsRef.current = currentIds;
+
+    if (brandNew.length === 0) return;
+
+    setReopenBannerDismissed(false);
+    setNewReopenTickets((prev) => {
+      const existingIds = new Set(prev.map((t) => t.ticketNo));
+      return [...prev, ...brandNew.filter((t) => !existingIds.has(t.ticketNo))];
+    });
+    setShowNewReopenModal(true);
   }, [cache]);
 
   const triggerScrape = useCallback(async () => {
@@ -1544,13 +1598,22 @@ export default function Dashboard() {
     return filteredRecent.filter((t) => t.status === "Open");
   }, [filteredRecent]);
 
+  // Reopen tickets matching the current filter — used for the reopen banner
+  const bannerReopenTickets = useMemo(() => {
+    return filteredRecent.filter((t) => t.status === "Reopen");
+  }, [filteredRecent]);
+
 
   const t = displayTotals;
 
+  const openBannerVisible   = bannerTickets.length > 0 && !bannerDismissed;
+  const reopenBannerVisible = bannerReopenTickets.length > 0 && !reopenBannerDismissed;
+  const bannerRows = (openBannerVisible ? 1 : 0) + (reopenBannerVisible ? 1 : 0);
+
   return (
-    <div className={`min-h-screen bg-gray-950 ${bannerTickets.length > 0 && !bannerDismissed ? "pt-9" : ""}`}>
+    <div className={`min-h-screen bg-gray-950 ${bannerRows === 2 ? "pt-[72px]" : bannerRows === 1 ? "pt-9" : ""}`}>
       {/* Persistent rolling ticker — all currently open tickets */}
-      {bannerTickets.length > 0 && !bannerDismissed && (
+      {openBannerVisible && (
         <div className="fixed top-0 left-0 right-0 z-[60] flex items-center h-9 bg-gray-950 border-b border-red-900/60 overflow-hidden shadow-lg">
           {/* Fixed label — click to open modal */}
           <button
@@ -1592,6 +1655,52 @@ export default function Dashboard() {
             onClick={() => setBannerDismissed(true)}
             title="Dismiss banner"
             className="px-4 h-full text-red-400 hover:text-white hover:bg-red-900/60 transition shrink-0 text-lg leading-none border-l border-red-900/60"
+          >
+            ×
+          </button>
+        </div>
+      )}
+
+      {/* Persistent rolling ticker — reopen tickets */}
+      {reopenBannerVisible && (
+        <div className={`fixed ${openBannerVisible ? "top-9" : "top-0"} left-0 right-0 z-[59] flex items-center h-9 bg-gray-950 border-b border-orange-900/60 overflow-hidden shadow-lg`}>
+          <button
+            onClick={() => setShowReopenModal(true)}
+            className="flex items-center gap-2 px-4 h-full bg-orange-950/80 border-r border-orange-800 shrink-0 hover:bg-orange-900/80 transition"
+          >
+            <span className="w-2 h-2 rounded-full bg-orange-400 animate-pulse" />
+            <span className="text-orange-200 text-[15px] font-bold uppercase tracking-widest whitespace-nowrap">
+              {bannerReopenTickets.length} Reopen
+            </span>
+          </button>
+          <div className="flex-1 overflow-hidden relative h-full flex items-center">
+            <div className="animate-marquee flex items-center">
+              {[...bannerReopenTickets, ...bannerReopenTickets].map((ticket, i) => {
+                const tag = getProjectTag(ticket.project, tagMap);
+                return (
+                  <span key={i} className="flex items-center gap-2 text-[15px] px-6">
+                    {tag ? (
+                      <span className={`inline-flex px-2 py-0.5 rounded text-[15px] font-bold ${TAG_BANNER_CLS[tag]}`}>
+                        {tag}
+                      </span>
+                    ) : (
+                      <span className="inline-flex px-2 py-0.5 rounded text-[15px] font-bold bg-gray-700 text-gray-400 border border-gray-600">
+                        Untagged
+                      </span>
+                    )}
+                    <span className="text-gray-400">·</span>
+                    <span className="text-gray-200">{ticket.project}</span>
+                    <span className="text-gray-600">·</span>
+                    <span className="text-amber-300 font-mono font-semibold">{ticket.ticketNo}</span>
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+          <button
+            onClick={() => setReopenBannerDismissed(true)}
+            title="Dismiss banner"
+            className="px-4 h-full text-orange-400 hover:text-white hover:bg-orange-900/60 transition shrink-0 text-lg leading-none border-l border-orange-900/60"
           >
             ×
           </button>
@@ -1653,6 +1762,106 @@ export default function Dashboard() {
             <div className="px-5 py-3 border-t border-gray-800">
               <button
                 onClick={() => setShowOpenTicketsModal(false)}
+                className="w-full py-2 text-sm rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 transition"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reopen tickets modal */}
+      {showReopenModal && bannerReopenTickets.length > 0 && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center px-4">
+          <div className="absolute inset-0" onClick={() => setShowReopenModal(false)} />
+          <div className="relative w-full max-w-lg bg-gray-900 border border-orange-800 rounded-2xl shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 bg-orange-950/70 border-b border-orange-800">
+              <div className="flex items-center gap-3">
+                <span className="w-3 h-3 rounded-full bg-orange-400 animate-pulse shrink-0" />
+                <div>
+                  <p className="text-white font-bold text-[50px] uppercase tracking-widest text-center">Reopen Tickets</p>
+                  <p className="text-orange-400 text-xs">{bannerReopenTickets.length} ticket{bannerReopenTickets.length > 1 ? "s" : ""} reopened</p>
+                </div>
+              </div>
+              <button onClick={() => setShowReopenModal(false)} className="text-orange-400 hover:text-white transition text-2xl leading-none">×</button>
+            </div>
+            <div className="grid grid-cols-3 px-5 py-2 border-b border-gray-800 bg-gray-900/80">
+              <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Product</span>
+              <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Project</span>
+              <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Ticket No.</span>
+            </div>
+            <div className="divide-y divide-gray-800/60 max-h-96 overflow-y-auto">
+              {bannerReopenTickets.map((ticket) => {
+                const tag = getProjectTag(ticket.project, tagMap);
+                return (
+                  <div key={ticket.ticketNo} className="grid grid-cols-3 items-center px-5 py-3 hover:bg-gray-800/40 transition gap-3">
+                    <div>
+                      {tag ? (
+                        <span className={`inline-flex px-2 py-0.5 rounded text-[20px] font-bold ${TAG_BANNER_CLS[tag]}`}>
+                          {tag}
+                        </span>
+                      ) : (
+                        <span className="inline-flex px-2 py-0.5 rounded text-[20px] font-bold bg-gray-700 text-gray-400 border border-gray-600">
+                          Untagged
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-gray-200 text-[20px] break-words">{ticket.project}</p>
+                    <p className="text-amber-300 font-mono text-[20px] font-semibold">{ticket.ticketNo}</p>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="px-5 py-3 border-t border-gray-800">
+              <button
+                onClick={() => setShowReopenModal(false)}
+                className="w-full py-2 text-sm rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 transition"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* New reopen ticket popup modal */}
+      {showNewReopenModal && newReopenTickets.length > 0 && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center px-4">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setShowNewReopenModal(false)} />
+          <div className="relative w-full max-w-md bg-gray-900 border border-orange-700 rounded-2xl shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 bg-orange-950/70 border-b border-orange-800">
+              <div className="flex items-center gap-3">
+                <span className="w-3 h-3 rounded-full bg-orange-400 animate-pulse shrink-0" />
+                <div>
+                  <p className="text-white font-bold text-sm">Ticket{newReopenTickets.length > 1 ? "s" : ""} Reopened</p>
+                  <p className="text-orange-400 text-xs">{newReopenTickets.length} ticket{newReopenTickets.length > 1 ? "s" : ""} need{newReopenTickets.length === 1 ? "s" : ""} attention</p>
+                </div>
+              </div>
+              <button onClick={() => setShowNewReopenModal(false)} className="text-orange-400 hover:text-white transition text-2xl leading-none">×</button>
+            </div>
+            <div className="divide-y divide-gray-800 max-h-80 overflow-y-auto">
+              {newReopenTickets.map((t) => {
+                const tag = getProjectTag(t.project, tagMap);
+                return (
+                  <div key={t.ticketNo} className="px-5 py-3.5 hover:bg-gray-800/40 transition">
+                    <div className="flex items-start justify-between gap-3 mb-1">
+                      <span className="text-orange-300 font-mono text-sm font-semibold">{t.ticketNo}</span>
+                      {tag && <TagBadge tag={tag} />}
+                    </div>
+                    <p className="text-gray-200 text-sm break-words">{t.project}</p>
+                    {t.subject && <p className="text-gray-500 text-xs mt-0.5 break-words">{t.subject}</p>}
+                    <div className="flex items-center gap-3 mt-1.5 text-xs text-gray-600">
+                      {t.createdDate && <span>Created: {t.createdDate}</span>}
+                      {t.severity && <span className={SEV_CLS[normalizeSeverity(t.severity)] ?? "text-gray-500"}>{t.severity}</span>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="px-5 py-3 border-t border-gray-800">
+              <button
+                onClick={() => setShowNewReopenModal(false)}
                 className="w-full py-2 text-sm rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 transition"
               >
                 Close
