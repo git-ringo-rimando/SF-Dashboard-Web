@@ -1135,10 +1135,6 @@ export default function Dashboard() {
   const [showNewTicketModal, setShowNewTicketModal] = useState(false);
   const [showOpenTicketsModal, setShowOpenTicketsModal] = useState(false);
   const [bannerDismissed, setBannerDismissed] = useState(false);
-  const [notifPermission, setNotifPermission] = useState<NotificationPermission | "unsupported">("default");
-  const [alertsEnabled, setAlertsEnabled] = useState<boolean>(() => {
-    try { return localStorage.getItem("sf-alerts-enabled") !== "false"; } catch { return true; }
-  });
   const prevOpenIdsRef = useRef<Set<string> | null>(null);
   const hasShownInitialModalRef = useRef(false);
   const scrapingRef = useRef(false);
@@ -1211,11 +1207,6 @@ export default function Dashboard() {
     } catch {}
   }, [router]);
 
-  // Sync notification permission state
-  useEffect(() => {
-    if (!("Notification" in window)) { setNotifPermission("unsupported"); return; }
-    setNotifPermission(Notification.permission);
-  }, []);
 
   // Detect new open tickets on each cache update
   useEffect(() => {
@@ -1241,13 +1232,6 @@ export default function Dashboard() {
     });
     setShowNewTicketModal(true);
 
-    if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted" && alertsEnabled) {
-      brandNew.forEach((t) => {
-        new Notification("🔴 New Open Ticket — SF Dashboard", {
-          body: `${t.ticketNo}  ·  ${t.project}`,
-        });
-      });
-    }
   }, [cache]);
 
   const triggerScrape = useCallback(async () => {
@@ -1666,39 +1650,13 @@ export default function Dashboard() {
             </div>
 
             {/* Footer */}
-            <div className="px-5 py-3 border-t border-gray-800 flex gap-2">
+            <div className="px-5 py-3 border-t border-gray-800">
               <button
                 onClick={() => setShowOpenTicketsModal(false)}
-                className="flex-1 py-2 text-sm rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 transition"
+                className="w-full py-2 text-sm rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 transition"
               >
                 Close
               </button>
-              {notifPermission !== "unsupported" && notifPermission !== "granted" && (
-                <button
-                  onClick={async () => {
-                    const result = await Notification.requestPermission();
-                    setNotifPermission(result);
-                  }}
-                  className="flex-1 flex items-center justify-center gap-1.5 py-2 text-sm rounded-lg
-                             bg-yellow-600/20 border border-yellow-700 text-yellow-400
-                             hover:bg-yellow-600/40 transition"
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                      d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                  </svg>
-                  Enable Alerts
-                </button>
-              )}
-              {notifPermission === "granted" && (
-                <div className="flex-1 flex items-center justify-center gap-1.5 py-2 text-sm rounded-lg
-                                bg-green-600/20 border border-green-700 text-green-400">
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  Alerts Enabled
-                </div>
-              )}
             </div>
           </div>
         </div>
@@ -1785,50 +1743,6 @@ export default function Dashboard() {
           <div className="flex items-center gap-3 shrink-0">
             {cache && <Countdown nextAt={nextAt} />}
 
-            {/* Browser notification permission — always visible */}
-            {notifPermission !== "unsupported" && (
-              <button
-                onClick={async () => {
-                  if (notifPermission === "denied") return;
-                  if (notifPermission !== "granted") {
-                    const result = await Notification.requestPermission();
-                    setNotifPermission(result);
-                    if (result === "granted") {
-                      setAlertsEnabled(true);
-                      try { localStorage.setItem("sf-alerts-enabled", "true"); } catch {}
-                    }
-                    return;
-                  }
-                  const next = !alertsEnabled;
-                  setAlertsEnabled(next);
-                  try { localStorage.setItem("sf-alerts-enabled", String(next)); } catch {}
-                }}
-                className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition ${
-                  notifPermission === "denied"
-                    ? "bg-red-600/20 border-red-700 text-red-400 cursor-not-allowed"
-                    : notifPermission === "granted" && alertsEnabled
-                    ? "bg-green-600/20 border-green-700 text-green-400 hover:bg-green-600/40 cursor-pointer"
-                    : notifPermission === "granted" && !alertsEnabled
-                    ? "bg-gray-700/40 border-gray-600 text-gray-400 hover:bg-gray-700 cursor-pointer"
-                    : "bg-yellow-600/20 border-yellow-700 text-yellow-400 hover:bg-yellow-600/40 cursor-pointer"
-                }`}
-                title={
-                  notifPermission === "denied"               ? "Notifications blocked — unblock in browser site settings" :
-                  notifPermission === "granted" && alertsEnabled  ? "Alerts on — click to turn off for this browser" :
-                  notifPermission === "granted" && !alertsEnabled ? "Alerts off — click to turn on for this browser" :
-                  "Enable desktop notifications for new open tickets"
-                }
-              >
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                    d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                </svg>
-                {notifPermission === "denied" ? "Alerts Blocked" :
-                 notifPermission === "granted" && alertsEnabled  ? "Alerts On" :
-                 notifPermission === "granted" && !alertsEnabled ? "Alerts Off" :
-                 "Enable Alerts"}
-              </button>
-            )}
 
             <TicketLocator />
 
