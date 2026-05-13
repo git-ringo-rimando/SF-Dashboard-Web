@@ -1631,7 +1631,7 @@ export default function Dashboard() {
               {[...bannerTickets, ...bannerTickets].map((ticket, i) => {
                 const tag = getProjectTag(ticket.project, tagMap);
                 return (
-                  <span key={i} className="flex items-center gap-2 text-[15px] px-6">
+                  <span key={`${i}-${ticket.ticketNo}`} className="flex items-center gap-2 text-[15px] px-6">
                     {tag ? (
                       <span className={`inline-flex px-2 py-0.5 rounded text-[15px] font-bold ${TAG_BANNER_CLS[tag]}`}>
                         {tag}
@@ -1678,7 +1678,7 @@ export default function Dashboard() {
               {[...bannerReopenTickets, ...bannerReopenTickets].map((ticket, i) => {
                 const tag = getProjectTag(ticket.project, tagMap);
                 return (
-                  <span key={i} className="flex items-center gap-2 text-[15px] px-6">
+                  <span key={`${i}-${ticket.ticketNo}`} className="flex items-center gap-2 text-[15px] px-6">
                     {tag ? (
                       <span className={`inline-flex px-2 py-0.5 rounded text-[15px] font-bold ${TAG_BANNER_CLS[tag]}`}>
                         {tag}

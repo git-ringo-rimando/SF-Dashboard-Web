@@ -345,7 +345,7 @@ async function extractTicketList(page: Page, username: string, startedAt: string
   for (let i = 0; i < 8; i++) {
     const count: number = await page.evaluate(
       () => document.querySelectorAll("table tbody tr").length
-    );
+    ).catch(() => 0);
     if (count > 0 && count === prevCount) break;
     prevCount = count;
     await new Promise((r) => setTimeout(r, 400));
