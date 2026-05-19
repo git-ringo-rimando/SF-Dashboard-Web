@@ -2000,7 +2000,7 @@ export default function Dashboard() {
               </div>
             )}
             <button onClick={async () => { await fetch("/api/auth", { method: "DELETE" }); router.replace("/"); }}
-              className="hidden sm:block text-xs text-gray-500 hover:text-white transition">Sign Out</button>
+              className="text-xs text-gray-500 hover:text-white transition whitespace-nowrap">Sign Out</button>
           </div>
         </div>
       </header>
