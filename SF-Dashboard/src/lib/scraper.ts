@@ -25,6 +25,8 @@ interface RawTicket {
   planStart?: string | null;
   planEnd?: string | null;
   fixedDate?: string | null;
+  verifiedDate?: string | null;
+  closedDate?: string | null;
   estimatedManhours?: number;
   completenessPercentage?: number | null;
   subject?: string;
@@ -60,7 +62,13 @@ export async function verifyLogin(
   try {
     res = await fetch(`${API}/Members/login?include=personal`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
+        "Accept": "application/json, text/plain, */*",
+        "Origin": "https://sfsupport.dataon.com",
+        "Referer": "https://sfsupport.dataon.com/",
+      },
       body: JSON.stringify({ email: username, password }),
     });
   } catch (e) {
@@ -87,8 +95,9 @@ export async function verifyLogin(
 // ── Ticket query ───────────────────────────────────────────────────────────────
 
 const TICKET_FIELDS = [
-  "id", "documentNo", "subject", "reportedDate", "fixedDate",
-  "createdAt", "completenessPercentage",
+  "id", "documentNo", "subject", "reportedDate",
+  "fixedDate", "verifiedDate", "closedDate", "planEnd",
+  "createdAt", "updatedAt", "completenessPercentage",
 ];
 
 // Only the relations needed to build the dashboard — history/members/attachments
@@ -123,7 +132,13 @@ async function fetchTickets(
     `?access_token=${encodeURIComponent(token)}` +
     `&memberId=${encodeURIComponent(memberId)}` +
     `&q=${encodeURIComponent(q)}`;
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Origin": "https://sfsupport.dataon.com",
+    "Referer": "https://sfsupport.dataon.com/app/ticket/list",
+  };
   if (cookie) headers["Cookie"] = cookie;
   const res = await fetch(url, { headers });
   if (!res.ok) {
@@ -162,7 +177,10 @@ function transformTickets(
     ticketNo:     t.documentNo ?? "",
     createdDate:  dateOnly(t.createdAt),
     reportedDate: dateOnly(t.reportedDate),
-    fixedDate:    dateOnly(t.fixedDate),
+    fixedDate:    (() => {
+      const resolved = ["fixed","closed","cancelled"].includes(statusOf(t));
+      return dateOnly(t.fixedDate ?? t.verifiedDate ?? t.closedDate ?? (resolved ? t.planEnd : undefined));
+    })(),
     project:      t.project?.projectName ?? "",
     module:       t.module?.description?.trim() ?? "",
     subject:      t.subject ?? "",
