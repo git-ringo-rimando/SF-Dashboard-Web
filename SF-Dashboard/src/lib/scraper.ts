@@ -119,7 +119,11 @@ async function fetchTickets(
     `${API}/Tickets/customListTicket` +
     `?memberId=${encodeURIComponent(memberId)}&q=${encodeURIComponent(q)}`;
   const res = await fetch(url, { headers: { Authorization: token } });
-  if (!res.ok) throw new Error(`Ticket API failed (HTTP ${res.status})`);
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    console.error(`[fetchTickets] HTTP ${res.status} — memberId=${memberId} body=${body.slice(0, 300)}`);
+    throw new Error(`Ticket API failed (HTTP ${res.status}): ${body.slice(0, 200)}`);
+  }
   return res.json();
 }
 
