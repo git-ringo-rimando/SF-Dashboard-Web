@@ -22,8 +22,8 @@ interface LoginResponse {
 interface RawTicket {
   id?: string | number;
   documentNo?: string;
-  planStart?: string;
-  planEnd?: string;
+  planStart?: string | null;
+  planEnd?: string | null;
   fixedDate?: string | null;
   estimatedManhours?: number;
   completenessPercentage?: number | null;
@@ -358,10 +358,10 @@ export async function scrapeTicketDetail(
   const fields: Record<string, string> = {
     "Document No":       t.documentNo ?? "",
     "Subject":           t.subject ?? "",
-    "Project":           t.project?.name ?? "",
-    "Module":            t.module?.name ?? "",
-    "Type":              t.type?.name ?? "",
-    "Status":            t.status?.name ?? "",
+    "Project":           t.project?.projectName ?? "",
+    "Module":            t.module?.description?.trim() ?? "",
+    "Type":              t.type?.description ?? "",
+    "Status":            t.status?.description ?? "",
     "Severity":          severityOf(t),
     "Reported Date":     dateOnly(t.reportedDate),
     "Created Date":      dateOnly(t.createdAt),
