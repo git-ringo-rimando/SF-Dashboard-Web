@@ -904,12 +904,12 @@ function TicketLocator() {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-16 px-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-4 sm:pt-16">
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setOpen(false)} />
 
       {/* Modal */}
-      <div className="relative w-full max-w-2xl bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl overflow-hidden">
+      <div className="relative w-full max-w-2xl max-h-[90vh] sm:max-h-none bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800">
           <div className="flex items-center gap-2">
@@ -1598,14 +1598,14 @@ export default function Dashboard() {
     <div className={`min-h-screen bg-gray-950 ${bannerRows === 2 ? "pt-[72px]" : bannerRows === 1 ? "pt-9" : ""}`}>
       {/* Persistent rolling ticker — all currently open tickets */}
       {openBannerVisible && (
-        <div className="fixed top-0 left-0 right-0 z-[60] flex items-center h-9 bg-gray-950 border-b border-red-900/60 overflow-hidden shadow-lg">
+        <div className="fixed top-0 left-0 right-0 z-[60] flex items-center h-8 sm:h-9 bg-gray-950 border-b border-red-900/60 overflow-hidden shadow-lg">
           {/* Fixed label — click to open modal */}
           <button
             onClick={() => setShowOpenTicketsModal(true)}
-            className="flex items-center gap-2 px-4 h-full bg-red-950/80 border-r border-red-800 shrink-0 hover:bg-red-900/80 transition"
+            className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 h-full bg-red-950/80 border-r border-red-800 shrink-0 hover:bg-red-900/80 transition"
           >
-            <span className="w-2 h-2 rounded-full bg-red-400 animate-pulse" />
-            <span className="text-red-200 text-[15px] font-bold uppercase tracking-widest whitespace-nowrap">
+            <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-red-400 animate-pulse" />
+            <span className="text-red-200 text-[13px] sm:text-[15px] font-bold uppercase tracking-wider sm:tracking-widest whitespace-nowrap">
               {bannerTickets.length} Open
             </span>
           </button>
@@ -1615,20 +1615,20 @@ export default function Dashboard() {
               {[...bannerTickets, ...bannerTickets].map((ticket, i) => {
                 const tag = getProjectTag(ticket.project, tagMap);
                 return (
-                  <span key={`${i}-${ticket.ticketNo}`} className="flex items-center gap-2 text-[15px] px-6">
+                  <span key={`${i}-${ticket.ticketNo}`} className="flex items-center gap-1 sm:gap-2 text-[13px] sm:text-[15px] px-3 sm:px-6">
                     {tag ? (
-                      <span className={`inline-flex px-2 py-0.5 rounded text-[15px] font-bold ${TAG_BANNER_CLS[tag]}`}>
+                      <span className={`inline-flex px-1.5 sm:px-2 py-0 sm:py-0.5 rounded text-[13px] sm:text-[15px] font-bold ${TAG_BANNER_CLS[tag]}`}>
                         {tag}
                       </span>
                     ) : (
-                      <span className="inline-flex px-2 py-0.5 rounded text-[15px] font-bold bg-gray-700 text-gray-400 border border-gray-600">
+                      <span className="inline-flex px-1.5 sm:px-2 py-0 sm:py-0.5 rounded text-[13px] sm:text-[15px] font-bold bg-gray-700 text-gray-400 border border-gray-600">
                         Untagged
                       </span>
                     )}
-                    <span className="text-gray-400">·</span>
-                    <span className="text-gray-200">{ticket.project}</span>
-                    <span className="text-gray-600">·</span>
-                    <span className="text-amber-300 font-mono font-semibold">{ticket.ticketNo}</span>
+                    <span className="hidden sm:inline text-gray-400">·</span>
+                    <span className="hidden sm:inline text-gray-200">{ticket.project}</span>
+                    <span className="hidden sm:inline text-gray-600">·</span>
+                    <span className="text-amber-300 font-mono font-semibold text-[12px] sm:text-base">{ticket.ticketNo}</span>
                   </span>
                 );
               })}
@@ -1638,7 +1638,7 @@ export default function Dashboard() {
           <button
             onClick={() => setBannerDismissed(true)}
             title="Dismiss banner"
-            className="px-4 h-full text-red-400 hover:text-white hover:bg-red-900/60 transition shrink-0 text-lg leading-none border-l border-red-900/60"
+            className="px-2.5 sm:px-4 h-full text-red-400 hover:text-white hover:bg-red-900/60 transition shrink-0 text-base sm:text-lg leading-none border-l border-red-900/60"
           >
             ×
           </button>
@@ -1647,13 +1647,13 @@ export default function Dashboard() {
 
       {/* Persistent rolling ticker — reopen tickets */}
       {reopenBannerVisible && (
-        <div className={`fixed ${openBannerVisible ? "top-9" : "top-0"} left-0 right-0 z-[59] flex items-center h-9 bg-gray-950 border-b border-orange-900/60 overflow-hidden shadow-lg`}>
+        <div className={`fixed ${openBannerVisible ? "top-8 sm:top-9" : "top-0"} left-0 right-0 z-[59] flex items-center h-8 sm:h-9 bg-gray-950 border-b border-orange-900/60 overflow-hidden shadow-lg`}>
           <button
             onClick={() => setShowReopenModal(true)}
-            className="flex items-center gap-2 px-4 h-full bg-orange-950/80 border-r border-orange-800 shrink-0 hover:bg-orange-900/80 transition"
+            className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 h-full bg-orange-950/80 border-r border-orange-800 shrink-0 hover:bg-orange-900/80 transition"
           >
-            <span className="w-2 h-2 rounded-full bg-orange-400 animate-pulse" />
-            <span className="text-orange-200 text-[15px] font-bold uppercase tracking-widest whitespace-nowrap">
+            <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-orange-400 animate-pulse" />
+            <span className="text-orange-200 text-[13px] sm:text-[15px] font-bold uppercase tracking-wider sm:tracking-widest whitespace-nowrap">
               {bannerReopenTickets.length} Reopen
             </span>
           </button>
@@ -1662,20 +1662,20 @@ export default function Dashboard() {
               {[...bannerReopenTickets, ...bannerReopenTickets].map((ticket, i) => {
                 const tag = getProjectTag(ticket.project, tagMap);
                 return (
-                  <span key={`${i}-${ticket.ticketNo}`} className="flex items-center gap-2 text-[15px] px-6">
+                  <span key={`${i}-${ticket.ticketNo}`} className="flex items-center gap-1 sm:gap-2 text-[13px] sm:text-[15px] px-3 sm:px-6">
                     {tag ? (
-                      <span className={`inline-flex px-2 py-0.5 rounded text-[15px] font-bold ${TAG_BANNER_CLS[tag]}`}>
+                      <span className={`inline-flex px-1.5 sm:px-2 py-0 sm:py-0.5 rounded text-[13px] sm:text-[15px] font-bold ${TAG_BANNER_CLS[tag]}`}>
                         {tag}
                       </span>
                     ) : (
-                      <span className="inline-flex px-2 py-0.5 rounded text-[15px] font-bold bg-gray-700 text-gray-400 border border-gray-600">
+                      <span className="inline-flex px-1.5 sm:px-2 py-0 sm:py-0.5 rounded text-[13px] sm:text-[15px] font-bold bg-gray-700 text-gray-400 border border-gray-600">
                         Untagged
                       </span>
                     )}
-                    <span className="text-gray-400">·</span>
-                    <span className="text-gray-200">{ticket.project}</span>
-                    <span className="text-gray-600">·</span>
-                    <span className="text-amber-300 font-mono font-semibold">{ticket.ticketNo}</span>
+                    <span className="hidden sm:inline text-gray-400">·</span>
+                    <span className="hidden sm:inline text-gray-200">{ticket.project}</span>
+                    <span className="hidden sm:inline text-gray-600">·</span>
+                    <span className="text-amber-300 font-mono font-semibold text-[12px] sm:text-base">{ticket.ticketNo}</span>
                   </span>
                 );
               })}
@@ -1684,7 +1684,7 @@ export default function Dashboard() {
           <button
             onClick={() => setReopenBannerDismissed(true)}
             title="Dismiss banner"
-            className="px-4 h-full text-orange-400 hover:text-white hover:bg-orange-900/60 transition shrink-0 text-lg leading-none border-l border-orange-900/60"
+            className="px-2.5 sm:px-4 h-full text-orange-400 hover:text-white hover:bg-orange-900/60 transition shrink-0 text-base sm:text-lg leading-none border-l border-orange-900/60"
           >
             ×
           </button>
@@ -1922,51 +1922,52 @@ export default function Dashboard() {
       )}
       {/* Header */}
       <header className="border-b border-gray-800 bg-gray-900/60 backdrop-blur sticky top-0 z-10">
-        <div className="max-w-screen-2xl mx-auto px-6 py-3 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-8 h-8 rounded-lg bg-teal-600 flex items-center justify-center shrink-0">
-              <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 py-2 sm:py-3 flex items-center justify-between gap-2 sm:gap-4">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-teal-600 flex items-center justify-center shrink-0">
+              <svg className="w-3.5 sm:w-4 h-3.5 sm:h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                   d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" />
               </svg>
             </div>
-            <span className="font-bold text-white text-sm">SunFish Support Dashboard</span>
-            <span className="hidden sm:inline text-xs text-gray-500">sfsupport.dataon.com</span>
+            <span className="font-bold text-white text-xs sm:text-sm">SF Dashboard</span>
+            <span className="hidden md:inline text-xs text-gray-500">sfsupport.dataon.com</span>
           </div>
-          <div className="flex items-center gap-3 shrink-0">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             {cache && <Countdown nextAt={nextAt} />}
 
-
-            <TicketLocator />
+            <div className="hidden sm:block">
+              <TicketLocator />
+            </div>
 
             <button
               onClick={() => setShowTagManager(true)}
-              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700
+              className="hidden sm:flex items-center gap-1.5 text-xs px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg bg-gray-800 border border-gray-700
                          text-gray-400 hover:border-gray-500 hover:text-gray-200 transition"
             >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                   d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
               </svg>
-              Tags
+              <span className="hidden sm:inline">Tags</span>
             </button>
 
             {/* Filter toggle */}
             <button
               onClick={() => setShowFilters((v) => !v)}
-              className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition ${
+              className={`flex items-center gap-1 sm:gap-1.5 text-xs px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg border transition ${
                 showFilters || fc > 0
                   ? "bg-teal-600/30 border-teal-600 text-teal-300"
                   : "bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-500"
               }`}
             >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                   d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z" />
               </svg>
-              Filters
+              <span className="hidden sm:inline">Filters</span>
               {fc > 0 && (
-                <span className="bg-teal-500 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] font-bold">
+                <span className="bg-teal-500 text-white rounded-full w-3.5 h-3.5 sm:w-4 sm:h-4 flex items-center justify-center text-[9px] sm:text-[10px] font-bold">
                   {fc}
                 </span>
               )}
@@ -1974,37 +1975,37 @@ export default function Dashboard() {
 
             {fc > 0 && (
               <button onClick={() => setFilters(EMPTY_FILTERS)}
-                className="text-xs text-gray-500 hover:text-white transition">
-                Clear filters
+                className="hidden sm:block text-xs text-gray-500 hover:text-white transition">
+                Clear
               </button>
             )}
 
             <button
               onClick={triggerScrape} disabled={scraping}
-              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-teal-600/20
+              className="flex items-center gap-1 sm:gap-1.5 text-xs px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg bg-teal-600/20
                          hover:bg-teal-600/40 text-teal-400 disabled:opacity-50 transition"
             >
-              <svg className={`w-3.5 h-3.5 ${scraping ? "animate-spin" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className={`w-3 h-3 sm:w-3.5 sm:h-3.5 ${scraping ? "animate-spin" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                   d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
               </svg>
-              {scraping ? "Refreshing…" : "Refresh"}
+              <span className="hidden sm:inline">{scraping ? "Refreshing…" : "Refresh"}</span>
             </button>
             {username && (
-              <div className="hidden sm:flex items-center gap-2 border-l border-gray-700 pl-3">
-                <div className="w-6 h-6 rounded-full bg-teal-700 flex items-center justify-center text-[10px] font-bold text-white uppercase shrink-0">
+              <div className="hidden md:flex items-center gap-2 border-l border-gray-700 pl-2 sm:pl-3">
+                <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-teal-700 flex items-center justify-center text-[9px] sm:text-[10px] font-bold text-white uppercase shrink-0">
                   {username.charAt(0)}
                 </div>
-                <span className="text-xs text-gray-300 max-w-[140px] truncate">{username}</span>
+                <span className="text-xs text-gray-300 max-w-[100px] sm:max-w-[140px] truncate">{username}</span>
               </div>
             )}
             <button onClick={async () => { await fetch("/api/auth", { method: "DELETE" }); router.replace("/"); }}
-              className="text-xs text-gray-500 hover:text-white transition">Sign Out</button>
+              className="hidden sm:block text-xs text-gray-500 hover:text-white transition">Sign Out</button>
           </div>
         </div>
       </header>
 
-      <main className="max-w-screen-2xl mx-auto px-6 py-8 space-y-6">
+      <main className="max-w-screen-2xl mx-auto px-4 sm:px-6 py-4 sm:py-8 space-y-4 sm:space-y-6">
 
         {/* Scrape progress bar */}
         {scraping && (

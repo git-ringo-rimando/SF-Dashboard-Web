@@ -49,7 +49,7 @@ async function safeGoto(page: Page, url: string, timeout = 120000): Promise<void
   const RETRYABLE = /Navigation timeout|net::ERR_|TimeoutError/i;
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      await page.goto(url, { waitUntil: "domcontentloaded", timeout });
+      await page.goto(url, { waitUntil: "domcontentloaded" as any, timeout });
       return;
     } catch (e) {
       const msg = String(e);
@@ -72,26 +72,6 @@ async function gotoAndWait(page: Page, url: string, selector: string, timeout = 
   );
 }
 
-/** Retry a page.evaluate() call if Angular destroys the execution context mid-flight. */
-async function retryOnDetach<T>(fn: () => Promise<T>, page: Page, retries = 3): Promise<T> {
-  for (let attempt = 0; attempt < retries; attempt++) {
-    try {
-      return await fn();
-    } catch (e) {
-      const msg = String(e);
-      if (
-        (msg.includes("detached Frame") || msg.includes("Execution context was destroyed")) &&
-        attempt < retries - 1
-      ) {
-        await page.waitForSelector("body", { timeout: 10000 }).catch(() => {});
-        await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
-        continue;
-      }
-      throw e;
-    }
-  }
-  throw new Error("retryOnDetach: failed after all retries");
-}
 
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36";
 
@@ -99,6 +79,12 @@ async function newPage(browser: Browser): Promise<Page> {
   const page = await browser.newPage();
   await page.setViewport({ width: 1600, height: 900 });
   await page.setUserAgent(UA);
+  await page.setRequestInterception(true);
+  page.on("request", (req) => {
+    const t = req.resourceType();
+    if (t === "image" || t === "font" || t === "media") req.abort();
+    else req.continue();
+  });
   return page;
 }
 
@@ -216,26 +202,40 @@ async function extractPartnerDashboard(page: Page): Promise<{
   unresolvedCount: number;
   unrespondedCount: number;
 }> {
-  await gotoAndWait(page, `${BASE}/app/partner-dashboard`, "table");
+  for (let attempt = 0; attempt < 4; attempt++) {
+    await gotoAndWait(page, `${BASE}/app/partner-dashboard`, "table");
+    await new Promise((r) => setTimeout(r, 800));
+    try {
+      return await page.evaluate(() => {
+        const periodMatch = document.body.innerText.match(/PERIODE\s+([\d\w\s]+TO[\d\w\s]+)/i);
+        const period = periodMatch ? periodMatch[1].trim() : "";
+        const tables = [...document.querySelectorAll("table")];
 
-  return retryOnDetach(() => page.evaluate(() => {
-    const periodMatch = document.body.innerText.match(/PERIODE\s+([\d\w\s]+TO[\d\w\s]+)/i);
-    const period = periodMatch ? periodMatch[1].trim() : "";
-    const tables = [...document.querySelectorAll("table")];
+        function parseTable(table: Element): TicketRow[] {
+          return [...table.querySelectorAll("tbody tr")]
+            .map((tr) => {
+              const c = [...tr.querySelectorAll("td")].map((td) => td.textContent?.trim() ?? "");
+              return { documentNo: c[0], project: c[1], type: c[2], status: c[3], reportedDate: c[4] };
+            })
+            .filter((r) => r.documentNo);
+        }
 
-    function parseTable(table: Element): TicketRow[] {
-      return [...table.querySelectorAll("tbody tr")]
-        .map((tr) => {
-          const c = [...tr.querySelectorAll("td")].map((td) => td.textContent?.trim() ?? "");
-          return { documentNo: c[0], project: c[1], type: c[2], status: c[3], reportedDate: c[4] };
-        })
-        .filter((r) => r.documentNo);
+        const t0 = tables[0] ? parseTable(tables[0]) : [];
+        const t1 = tables[1] ? parseTable(tables[1]) : [];
+        return { period, unresolvedTickets: t0, unrespondedTickets: t1, unresolvedCount: t0.length, unrespondedCount: t1.length };
+      });
+    } catch (e) {
+      if (
+        (String(e).includes("detached Frame") || String(e).includes("Execution context was destroyed")) &&
+        attempt < 3
+      ) {
+        await new Promise((r) => setTimeout(r, 2000));
+        continue;
+      }
+      throw e;
     }
-
-    const t0 = tables[0] ? parseTable(tables[0]) : [];
-    const t1 = tables[1] ? parseTable(tables[1]) : [];
-    return { period, unresolvedTickets: t0, unrespondedTickets: t1, unresolvedCount: t0.length, unrespondedCount: t1.length };
-  }), page);
+  }
+  throw new Error("extractPartnerDashboard: failed after retries");
 }
 
 async function extractStatistics(page: Page): Promise<{
@@ -244,62 +244,76 @@ async function extractStatistics(page: Page): Promise<{
   severityBreakdown: SeverityRow[];
   totals: DashboardCache["totals"];
 }> {
-  await gotoAndWait(page, `${BASE}/app/ticket/statistic`, "table");
+  for (let attempt = 0; attempt < 4; attempt++) {
+    await gotoAndWait(page, `${BASE}/app/ticket/statistic`, "table");
 
-  // Wait for Angular to populate the table with actual numeric data
-  await page.waitForFunction(
-    () => {
-      const cell = document.querySelector("table tbody tr td:nth-child(2)");
-      return !!cell && /\d/.test(cell.textContent ?? "");
-    },
-    { timeout: 60000 }
-  ).catch(() => {});
+    await page.waitForFunction(
+      () => {
+        const cell = document.querySelector("table tbody tr td:nth-child(2)");
+        return !!cell && /\d/.test(cell.textContent ?? "");
+      },
+      { timeout: 60000 }
+    ).catch(() => {});
 
-  return retryOnDetach(() => page.evaluate(() => {
-    const num = (s: string | undefined) => parseInt(s ?? "0") || 0;
-    const periodInput =
-      (document.querySelector('input[type="text"]') as HTMLInputElement)?.value ??
-      document.querySelector(".ui-inputtext")?.textContent?.trim() ?? "";
+    await new Promise((r) => setTimeout(r, 800));
+    try {
+      return await page.evaluate(() => {
+        const num = (s: string | undefined) => parseInt(s ?? "0") || 0;
+        const periodInput =
+          (document.querySelector('input[type="text"]') as HTMLInputElement)?.value ??
+          document.querySelector(".ui-inputtext")?.textContent?.trim() ?? "";
 
-    const tables = [...document.querySelectorAll("table")];
-    const moduleRows: ModuleRow[] = [];
-    if (tables[0]) {
-      [...tables[0].querySelectorAll("tbody tr")].forEach((tr) => {
-        const c = [...tr.querySelectorAll("td")].map((td) => td.textContent?.trim() ?? "");
-        if (!c[0] || c[0].toLowerCase() === "total") return;
-        moduleRows.push({
-          module: c[0], total: num(c[1]),
-          critical: num(c[2]), high: num(c[3]), medium: num(c[4]), low: num(c[5]),
-          open: num(c[6]), responded: num(c[7]), reopen: num(c[8]),
-          fixed: num(c[9]), closed: num(c[10]), cancelled: num(c[11]),
-        });
+        const tables = [...document.querySelectorAll("table")];
+        const moduleRows: ModuleRow[] = [];
+        if (tables[0]) {
+          [...tables[0].querySelectorAll("tbody tr")].forEach((tr) => {
+            const c = [...tr.querySelectorAll("td")].map((td) => td.textContent?.trim() ?? "");
+            if (!c[0] || c[0].toLowerCase() === "total") return;
+            moduleRows.push({
+              module: c[0], total: num(c[1]),
+              critical: num(c[2]), high: num(c[3]), medium: num(c[4]), low: num(c[5]),
+              open: num(c[6]), responded: num(c[7]), reopen: num(c[8]),
+              fixed: num(c[9]), closed: num(c[10]), cancelled: num(c[11]),
+            });
+          });
+        }
+
+        let totals = { all: 0, open: 0, responded: 0, reopen: 0, fixed: 0, closed: 0, cancelled: 0, unresolved: 0, unresponded: 0 };
+        if (tables[0]) {
+          const totalRow =
+            tables[0].querySelector("tfoot tr") ??
+            [...tables[0].querySelectorAll("tbody tr")].findLast(
+              (r) => r.querySelector("td")?.textContent?.trim().toLowerCase() === "total"
+            );
+          if (totalRow) {
+            const c = [...totalRow.querySelectorAll("td, th")].map((el) => el.textContent?.trim() ?? "");
+            totals = { ...totals, all: num(c[1]), open: num(c[6]), responded: num(c[7]), reopen: num(c[8]), fixed: num(c[9]), closed: num(c[10]), cancelled: num(c[11]) };
+          }
+        }
+
+        const severityRows: SeverityRow[] = [];
+        if (tables[1]) {
+          [...tables[1].querySelectorAll("tbody tr")].forEach((tr) => {
+            const c = [...tr.querySelectorAll("td")].map((td) => td.textContent?.trim() ?? "");
+            if (!c[0] || c[0].toLowerCase() === "total") return;
+            severityRows.push({ severity: c[0], open: num(c[1]), responded: num(c[2]), reopen: num(c[3]), fixed: num(c[4]), closed: num(c[5]), cancelled: num(c[6]) });
+          });
+        }
+
+        return { period: periodInput, moduleBreakdown: moduleRows, severityBreakdown: severityRows, totals };
       });
-    }
-
-    let totals = { all: 0, open: 0, responded: 0, reopen: 0, fixed: 0, closed: 0, cancelled: 0, unresolved: 0, unresponded: 0 };
-    if (tables[0]) {
-      const totalRow =
-        tables[0].querySelector("tfoot tr") ??
-        [...tables[0].querySelectorAll("tbody tr")].findLast(
-          (r) => r.querySelector("td")?.textContent?.trim().toLowerCase() === "total"
-        );
-      if (totalRow) {
-        const c = [...totalRow.querySelectorAll("td, th")].map((el) => el.textContent?.trim() ?? "");
-        totals = { ...totals, all: num(c[1]), open: num(c[6]), responded: num(c[7]), reopen: num(c[8]), fixed: num(c[9]), closed: num(c[10]), cancelled: num(c[11]) };
+    } catch (e) {
+      if (
+        (String(e).includes("detached Frame") || String(e).includes("Execution context was destroyed")) &&
+        attempt < 3
+      ) {
+        await new Promise((r) => setTimeout(r, 2000));
+        continue;
       }
+      throw e;
     }
-
-    const severityRows: SeverityRow[] = [];
-    if (tables[1]) {
-      [...tables[1].querySelectorAll("tbody tr")].forEach((tr) => {
-        const c = [...tr.querySelectorAll("td")].map((td) => td.textContent?.trim() ?? "");
-        if (!c[0] || c[0].toLowerCase() === "total") return;
-        severityRows.push({ severity: c[0], open: num(c[1]), responded: num(c[2]), reopen: num(c[3]), fixed: num(c[4]), closed: num(c[5]), cancelled: num(c[6]) });
-      });
-    }
-
-    return { period: periodInput, moduleBreakdown: moduleRows, severityBreakdown: severityRows, totals };
-  }), page);
+  }
+  throw new Error("extractStatistics: failed after retries");
 }
 
 // ── Date helper (server-side) ─────────────────────────────────────────────────
@@ -401,8 +415,12 @@ async function extractTicketList(page: Page, username: string, startedAt: string
     } catch (e) {
       const msg = String(e);
       if (msg.includes("detached Frame") || msg.includes("Execution context was destroyed")) {
-        await new Promise((r) => setTimeout(r, 1500));
-        await waitForTicketData(page, 15000);
+        await page.waitForFunction(
+          () => document.readyState === "complete",
+          { timeout: 15000 }
+        ).catch(() => {});
+        await new Promise((r) => setTimeout(r, 2000));
+        await waitForTicketData(page, 30000);
         continue;
       }
       throw e;
