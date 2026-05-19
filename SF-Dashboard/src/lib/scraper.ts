@@ -55,7 +55,7 @@ interface RawTicket {
 export async function verifyLogin(
   username: string,
   password: string
-): Promise<{ ok: true; memberId: string; token: string } | { ok: false; error: string }> {
+): Promise<{ ok: true; memberId: string; token: string; cookie: string } | { ok: false; error: string }> {
   let res: Response;
   try {
     res = await fetch(`${API}/Members/login?include=personal`, {
@@ -79,7 +79,9 @@ export async function verifyLogin(
   if (!data.id || !data.userId) {
     return { ok: false, error: "Unexpected API response — missing token or userId." };
   }
-  return { ok: true, memberId: String(data.userId), token: data.id };
+  // Capture session cookie so subsequent API calls share the same session
+  const cookie = res.headers.get("set-cookie") ?? "";
+  return { ok: true, memberId: String(data.userId), token: data.id, cookie };
 }
 
 // ── Ticket query ───────────────────────────────────────────────────────────────
@@ -111,14 +113,19 @@ function buildQuery(
 async function fetchTickets(
   token: string,
   memberId: string,
+  cookie: string,
   targetDateFrom?: string,
   whereExtra?: Record<string, unknown>
 ): Promise<RawTicket[]> {
   const q = buildQuery(targetDateFrom, whereExtra);
   const url =
     `${API}/Tickets/customListTicket` +
-    `?memberId=${encodeURIComponent(memberId)}&q=${encodeURIComponent(q)}`;
-  const res = await fetch(url, { headers: { Authorization: token } });
+    `?access_token=${encodeURIComponent(token)}` +
+    `&memberId=${encodeURIComponent(memberId)}` +
+    `&q=${encodeURIComponent(q)}`;
+  const headers: Record<string, string> = {};
+  if (cookie) headers["Cookie"] = cookie;
+  const res = await fetch(url, { headers });
   if (!res.ok) {
     const body = await res.text().catch(() => "");
     console.error(`[fetchTickets] HTTP ${res.status} — memberId=${memberId} body=${body.slice(0, 300)}`);
@@ -286,7 +293,7 @@ export async function scrape(
     if (!auth.ok) throw new Error(auth.error);
     saveProgress({ phase: "Fetching tickets", current: 1, total: 3, startedAt }, username);
 
-    const tickets = await fetchTickets(auth.token, memberId ?? auth.memberId, targetDateFrom);
+    const tickets = await fetchTickets(auth.token, memberId ?? auth.memberId, auth.cookie, targetDateFrom);
     console.log(`[scrape] ${username}: fetched ${tickets.length} tickets`);
     saveProgress({ phase: "Saving", current: 2, total: 3, startedAt }, username);
 
@@ -345,8 +352,12 @@ export async function scrapeTicketDetail(
 
   const url =
     `${API}/Tickets/customListTicket` +
-    `?memberId=${encodeURIComponent(auth.memberId)}&q=${encodeURIComponent(q)}`;
-  const res = await fetch(url, { headers: { Authorization: auth.token } });
+    `?access_token=${encodeURIComponent(auth.token)}` +
+    `&memberId=${encodeURIComponent(auth.memberId)}` +
+    `&q=${encodeURIComponent(q)}`;
+  const headers: Record<string, string> = {};
+  if (auth.cookie) headers["Cookie"] = auth.cookie;
+  const res = await fetch(url, { headers });
   if (!res.ok) return { error: `Ticket API failed (HTTP ${res.status})` };
 
   const list: RawTicket[] = await res.json();

@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: result.error }, { status: 401 });
   }
 
-  await saveCredentials(username, password, result.memberId);
+  await saveCredentials(username, password, result.memberId, result.cookie);
   scrape(username, password, undefined, result.memberId).catch(console.error);
 
   const res = NextResponse.json({ ok: true });
