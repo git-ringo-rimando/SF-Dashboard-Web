@@ -17,13 +17,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Username and password are required." }, { status: 400 });
   }
 
-  let result: { ok: true; cookies: import("puppeteer").Cookie[] } | { ok: false; error: string };
+  let result: Awaited<ReturnType<typeof verifyLogin>>;
   try {
     result = await verifyLogin(username, password);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error("[auth] verifyLogin threw:", msg);
-    const friendly = /timeout|ECONNREFUSED|net::ERR/i.test(msg)
+    const friendly = /ECONNREFUSED|net::ERR/i.test(msg)
       ? "Could not reach sfsupport.dataon.com — check your connection and try again."
       : "An unexpected error occurred while verifying your credentials.";
     return NextResponse.json({ error: friendly }, { status: 502 });
@@ -32,8 +32,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: result.error }, { status: 401 });
   }
 
-  await saveCredentials(username, password);
-  scrape(username, password, undefined, result.cookies).catch(console.error);
+  await saveCredentials(username, password, result.memberId);
+  scrape(username, password, undefined, result.memberId).catch(console.error);
 
   const res = NextResponse.json({ ok: true });
   res.cookies.set(COOKIE, username, COOKIE_OPTS);

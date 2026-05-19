@@ -49,13 +49,19 @@ function writeLocal(file: string, content: string): void {
 
 // ── Credentials ───────────────────────────────────────────────────────────────
 
-export async function saveCredentials(username: string, password: string): Promise<void> {
-  const encrypted = encrypt(JSON.stringify({ username, password }));
+export interface Credentials {
+  username: string;
+  password: string;
+  memberId?: string;
+}
+
+export async function saveCredentials(username: string, password: string, memberId?: string): Promise<void> {
+  const encrypted = encrypt(JSON.stringify({ username, password, memberId }));
   writeLocal(credsFile(username), encrypted);
   await redisSet(`sf:creds:${sanitize(username)}`, encrypted, 90 * 86400);
 }
 
-export async function loadCredentials(username: string): Promise<{ username: string; password: string } | null> {
+export async function loadCredentials(username: string): Promise<Credentials | null> {
   const file = credsFile(username);
   if (fs.existsSync(file)) {
     try { return JSON.parse(decrypt(fs.readFileSync(file, "utf8"))); } catch {}
@@ -63,7 +69,7 @@ export async function loadCredentials(username: string): Promise<{ username: str
   const raw = await redisGet(`sf:creds:${sanitize(username)}`);
   if (!raw) return null;
   try {
-    const creds = JSON.parse(decrypt(raw)) as { username: string; password: string };
+    const creds = JSON.parse(decrypt(raw)) as Credentials;
     writeLocal(file, raw);
     return creds;
   } catch {
