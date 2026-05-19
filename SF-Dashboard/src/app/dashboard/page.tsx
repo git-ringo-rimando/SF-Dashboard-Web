@@ -646,7 +646,7 @@ function TicketMiniTable({ rows, title, tagMap = {}, breakdown = false }: { rows
 }
 
 function ModuleTable({ rows }: { rows: ModuleRow[] }) {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
       <div className="px-5 py-3 border-b border-gray-800 flex items-center justify-between">
@@ -727,7 +727,7 @@ function SeverityTable({ rows }: { rows: SeverityRow[] }) {
 }
 
 function RecentTable({ rows, tagMap = {} }: { rows: RecentTicket[]; tagMap?: TagMap }) {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
       <div className="px-5 py-3 border-b border-gray-800 flex items-center justify-between">
