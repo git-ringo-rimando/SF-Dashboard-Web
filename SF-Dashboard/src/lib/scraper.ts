@@ -183,7 +183,7 @@ function transformTickets(
     task:         t.type?.description ?? "",
     ticketNo:     t.documentNo ?? "",
     createdDate:  dateTime(t.createdAt),
-    reportedDate: dateOnly(t.reportedDate),
+    reportedDate: dateTime(t.reportedDate),
     fixedDate:    (() => {
       const resolved = ["fixed","closed","cancelled"].includes(statusOf(t));
       return dateTime(t.fixedDate ?? t.verifiedDate ?? t.closedDate ?? (resolved ? t.planEnd : undefined));
