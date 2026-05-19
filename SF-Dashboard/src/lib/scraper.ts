@@ -157,6 +157,13 @@ function dateOnly(s?: string | null): string {
   return s;
 }
 
+// Format ISO datetime as "YYYY-MM-DD HH:mm" (UTC), falls back to dateOnly
+function dateTime(s?: string | null): string {
+  if (!s) return "";
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(s)) return s.slice(0, 10) + " " + s.slice(11, 16);
+  return dateOnly(s);
+}
+
 function statusOf(t: RawTicket): string {
   return (t.status?.description ?? "").toLowerCase();
 }
@@ -175,11 +182,11 @@ function transformTickets(
   const recentTickets: RecentTicket[] = tickets.map((t) => ({
     task:         t.type?.description ?? "",
     ticketNo:     t.documentNo ?? "",
-    createdDate:  dateOnly(t.createdAt),
+    createdDate:  dateTime(t.createdAt),
     reportedDate: dateOnly(t.reportedDate),
     fixedDate:    (() => {
       const resolved = ["fixed","closed","cancelled"].includes(statusOf(t));
-      return dateOnly(t.fixedDate ?? t.verifiedDate ?? t.closedDate ?? (resolved ? t.planEnd : undefined));
+      return dateTime(t.fixedDate ?? t.verifiedDate ?? t.closedDate ?? (resolved ? t.planEnd : undefined));
     })(),
     project:      t.project?.projectName ?? "",
     module:       t.module?.description?.trim() ?? "",
