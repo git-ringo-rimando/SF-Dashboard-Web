@@ -1426,7 +1426,7 @@ export default function Dashboard() {
       const dB = toDateOnly(b.createdDate) ?? "";
       return dB.localeCompare(dA); // newest first
     });
-  }, [cache, filters]);
+  }, [cache, filters, tagMap]);
   const sortTicketRows = (rows: import("@/lib/store").TicketRow[]) =>
     [...rows].sort((a, b) => {
       const stA = STATUS_ORDER[a.status] ?? 9;

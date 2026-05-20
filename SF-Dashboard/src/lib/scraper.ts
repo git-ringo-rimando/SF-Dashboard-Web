@@ -1,5 +1,6 @@
 import {
   saveCache,
+  loadCache,
   saveProgress,
   clearProgress,
   type DashboardCache,
@@ -318,7 +319,16 @@ export async function scrape(
     if (!auth.ok) throw new Error(auth.error);
     saveProgress({ phase: "Fetching tickets", current: 1, total: 3, startedAt }, username);
 
-    const tickets = await fetchTickets(auth.token, memberId ?? auth.memberId, auth.cookie, targetDateFrom);
+    let tickets = await fetchTickets(auth.token, memberId ?? auth.memberId, auth.cookie, targetDateFrom)
+      .catch(async (e: unknown) => {
+        // If the date-filtered query fails with a server error, retry without the date filter.
+        // The customListTicket endpoint sometimes returns 500 when a where clause is included.
+        if (targetDateFrom && e instanceof Error && /HTTP 5\d\d/.test(e.message)) {
+          console.warn(`[scrape] ${username}: date-filtered query failed (${e.message}), retrying without date filter`);
+          return fetchTickets(auth.token, memberId ?? auth.memberId, auth.cookie);
+        }
+        throw e;
+      });
     console.log(`[scrape] ${username}: fetched ${tickets.length} tickets`);
     saveProgress({ phase: "Saving", current: 2, total: 3, startedAt }, username);
 
@@ -328,7 +338,14 @@ export async function scrape(
     );
   } catch (e) {
     console.error("[scrape] error:", e);
-    await saveCache({ ...empty, error: e instanceof Error ? e.message : String(e) }, username);
+    // Preserve existing ticket data — only overwrite the error field so the dashboard
+    // keeps showing the last good data instead of going blank on a transient failure.
+    const existing = await loadCache(username);
+    await saveCache({
+      ...(existing ?? empty),
+      scrapedAt: new Date().toISOString(),
+      error: e instanceof Error ? e.message : String(e),
+    }, username);
   } finally {
     clearProgress(username);
   }
