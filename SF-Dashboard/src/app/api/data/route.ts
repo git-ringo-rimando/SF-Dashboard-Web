@@ -8,7 +8,7 @@ export async function GET(req: NextRequest) {
   const creds = await loadCredentials(username);
   const hasCreds = !!creds;
   const [cache, tags] = hasCreds
-    ? await Promise.all([loadCache(username), loadTags(username)])
+    ? await Promise.all([loadCache(username), loadTags()])
     : [null, {}];
 
   return NextResponse.json(

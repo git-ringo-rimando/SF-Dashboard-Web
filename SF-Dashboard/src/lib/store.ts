@@ -38,7 +38,7 @@ function sanitize(username: string): string {
 function userDir(username: string)      { return path.join(DATA_DIR, sanitize(username)); }
 function credsFile(username: string)    { return path.join(userDir(username), "credentials.enc"); }
 function cacheFile(username: string)    { return path.join(userDir(username), "cache.json"); }
-function tagsFile(username: string)     { return path.join(userDir(username), "tags.json"); }
+function tagsFile()                      { return path.join(DATA_DIR, "__shared__", "tags.json"); }
 function progressFile(username: string) { return path.join(userDir(username), "progress.json"); }
 
 function writeLocal(file: string, content: string): void {
@@ -244,18 +244,18 @@ export async function loadCache(username: string): Promise<DashboardCache | null
 export type ProductTag = "Sunfish 6" | "Sunfish 7" | "Greatday";
 export type TagMap = Record<string, ProductTag>;
 
-export async function saveTags(tags: TagMap, username: string): Promise<void> {
+export async function saveTags(tags: TagMap): Promise<void> {
   const json = JSON.stringify(tags, null, 2);
-  writeLocal(tagsFile(username), json);
-  await redisSet(`sf:tags:${sanitize(username)}`, json, 90 * 86400);
+  writeLocal(tagsFile(), json);
+  await redisSet("sf:tags:shared", json, 365 * 86400);
 }
 
-export async function loadTags(username: string): Promise<TagMap> {
-  const file = tagsFile(username);
+export async function loadTags(): Promise<TagMap> {
+  const file = tagsFile();
   if (fs.existsSync(file)) {
     try { return JSON.parse(fs.readFileSync(file, "utf8")); } catch {}
   }
-  const raw = await redisGet(`sf:tags:${sanitize(username)}`);
+  const raw = await redisGet("sf:tags:shared");
   if (!raw) return {};
   try {
     const tags = JSON.parse(raw) as TagMap;
