@@ -247,7 +247,7 @@ export type TagMap = Record<string, ProductTag>;
 export async function saveTags(tags: TagMap, username: string): Promise<void> {
   const json = JSON.stringify(tags, null, 2);
   writeLocal(tagsFile(username), json);
-  await redisSet(`sf:tags:${sanitize(username)}`, json, 7 * 86400);
+  await redisSet(`sf:tags:${sanitize(username)}`, json, 90 * 86400);
 }
 
 export async function loadTags(username: string): Promise<TagMap> {
@@ -301,8 +301,9 @@ export async function loadProgress(username: string): Promise<ScrapeProgress | n
 export async function clearAllData(username: string): Promise<void> {
   _cacheMemory.delete(username);
   const s = sanitize(username);
-  for (const file of [credsFile(username), cacheFile(username), tagsFile(username), progressFile(username)]) {
+  // Tags are persistent user preferences — kept across sign-out/sign-in cycles
+  for (const file of [credsFile(username), cacheFile(username), progressFile(username)]) {
     try { if (fs.existsSync(file)) fs.unlinkSync(file); } catch {}
   }
-  await redisDel(`sf:creds:${s}`, `sf:cache:${s}`, `sf:tags:${s}`, `sf:progress:${s}`);
+  await redisDel(`sf:creds:${s}`, `sf:cache:${s}`, `sf:progress:${s}`);
 }
