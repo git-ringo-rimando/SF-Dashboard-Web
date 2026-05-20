@@ -54,10 +54,11 @@ export interface Credentials {
   password: string;
   memberId?: string;
   cookie?: string;
+  token?: string;
 }
 
-export async function saveCredentials(username: string, password: string, memberId?: string, cookie?: string): Promise<void> {
-  const encrypted = encrypt(JSON.stringify({ username, password, memberId, cookie }));
+export async function saveCredentials(username: string, password: string, memberId?: string, cookie?: string, token?: string): Promise<void> {
+  const encrypted = encrypt(JSON.stringify({ username, password, memberId, cookie, token }));
   writeLocal(credsFile(username), encrypted);
   await redisSet(`sf:creds:${sanitize(username)}`, encrypted, 90 * 86400);
 }

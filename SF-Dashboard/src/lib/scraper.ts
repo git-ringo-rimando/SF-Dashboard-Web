@@ -1,6 +1,8 @@
 import {
   saveCache,
   loadCache,
+  saveCredentials,
+  loadCredentials,
   saveProgress,
   clearProgress,
   type DashboardCache,
@@ -300,7 +302,9 @@ export async function scrape(
   username: string,
   password: string,
   targetDateFrom?: string,
-  memberId?: string
+  memberId?: string,
+  existingToken?: string,
+  existingCookie?: string
 ): Promise<void> {
   const startedAt = new Date().toISOString();
   saveProgress({ phase: "Authenticating", current: 0, total: 3, startedAt }, username);
@@ -314,21 +318,54 @@ export async function scrape(
     moduleBreakdown: [], severityBreakdown: [], recentTickets: [],
   };
 
-  try {
+  // Helper: authenticate and save fresh credentials
+  const login = async () => {
     const auth = await verifyLogin(username, password);
     if (!auth.ok) throw new Error(auth.error);
+    // Persist the fresh token/cookie so subsequent scrapes can reuse them
+    const creds = await loadCredentials(username);
+    if (creds) await saveCredentials(creds.username, creds.password, auth.memberId, auth.cookie, auth.token);
+    return auth;
+  };
+
+  try {
+    // Use stored token when available — avoids re-login which can cause 500s
+    // due to conflicting sessions on the upstream API.
+    let token  = existingToken;
+    let cookie = existingCookie;
+    let mid    = memberId;
+
+    if (!token) {
+      saveProgress({ phase: "Authenticating", current: 0, total: 3, startedAt }, username);
+      const auth = await login();
+      token  = auth.token;
+      cookie = auth.cookie;
+      mid    = memberId ?? auth.memberId;
+    }
+
     saveProgress({ phase: "Fetching tickets", current: 1, total: 3, startedAt }, username);
 
-    let tickets = await fetchTickets(auth.token, memberId ?? auth.memberId, auth.cookie, targetDateFrom)
-      .catch(async (e: unknown) => {
-        // If the date-filtered query fails with a server error, retry without the date filter.
-        // The customListTicket endpoint sometimes returns 500 when a where clause is included.
-        if (targetDateFrom && e instanceof Error && /HTTP 5\d\d/.test(e.message)) {
+    // Attempt to fetch tickets; on auth failure, re-login once and retry
+    const tryFetch = async (tok: string, cok: string, m: string) => {
+      try {
+        return await fetchTickets(tok, m, cok, targetDateFrom);
+      } catch (e) {
+        if (e instanceof Error && /HTTP 4\d\d/.test(e.message)) {
+          // Token expired — re-login and retry
+          console.warn(`[scrape] ${username}: token rejected (${e.message}), re-authenticating`);
+          const fresh = await login();
+          return fetchTickets(fresh.token, m ?? fresh.memberId, fresh.cookie, targetDateFrom);
+        }
+        if (e instanceof Error && /HTTP 5\d\d/.test(e.message) && targetDateFrom) {
+          // Date-filtered query rejected — retry without date filter
           console.warn(`[scrape] ${username}: date-filtered query failed (${e.message}), retrying without date filter`);
-          return fetchTickets(auth.token, memberId ?? auth.memberId, auth.cookie);
+          return fetchTickets(tok, m, cok);
         }
         throw e;
-      });
+      }
+    };
+
+    const tickets = await tryFetch(token, cookie ?? "", mid ?? "");
     console.log(`[scrape] ${username}: fetched ${tickets.length} tickets`);
     saveProgress({ phase: "Saving", current: 2, total: 3, startedAt }, username);
 

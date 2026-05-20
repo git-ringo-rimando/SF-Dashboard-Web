@@ -11,6 +11,6 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json().catch(() => ({}));
   const targetDateFrom: string | undefined = body.targetDateFrom;
-  scrape(creds.username, creds.password, targetDateFrom, creds.memberId).catch(console.error);
+  scrape(creds.username, creds.password, targetDateFrom, creds.memberId, creds.token, creds.cookie).catch(console.error);
   return NextResponse.json({ ok: true, message: "Scrape started." });
 }

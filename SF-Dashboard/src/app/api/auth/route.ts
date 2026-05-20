@@ -32,8 +32,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: result.error }, { status: 401 });
   }
 
-  await saveCredentials(username, password, result.memberId, result.cookie);
-  scrape(username, password, undefined, result.memberId).catch(console.error);
+  await saveCredentials(username, password, result.memberId, result.cookie, result.token);
+  scrape(username, password, undefined, result.memberId, result.token, result.cookie).catch(console.error);
 
   const res = NextResponse.json({ ok: true });
   res.cookies.set(COOKIE, username, COOKIE_OPTS);
