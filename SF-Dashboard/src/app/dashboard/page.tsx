@@ -1234,7 +1234,9 @@ export default function Dashboard() {
       return;
     }
 
-    const brandNew = openTickets.filter((t) => !prevOpenIdsRef.current!.has(t.ticketNo));
+    const brandNew = openTickets
+      .filter((t) => !prevOpenIdsRef.current!.has(t.ticketNo))
+      .filter((t) => !isProjectExcluded(t.project, filters.includedInternalProjects, filters.customExcludedProjects));
     prevOpenIdsRef.current = currentIds;
 
     if (brandNew.length === 0) return;
