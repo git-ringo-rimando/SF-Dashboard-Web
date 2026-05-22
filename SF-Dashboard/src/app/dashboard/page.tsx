@@ -9,9 +9,11 @@ const REFRESH_MS = 5 * 60 * 1000;
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface Filters {
-  dateFrom: string;   // "YYYY-MM-DD" or ""
+  dateFrom: string;     // "YYYY-MM-DD" or ""
   dateTo: string;
   datePreset: string;
+  dateFromDT: string;   // "YYYY-MM-DDTHH:MM" — set for time-precise SDP presets
+  dateToDT: string;
   fixDateFrom: string;
   fixDateTo: string;
   fixDatePreset: string;
@@ -23,7 +25,7 @@ interface Filters {
   customExcludedProjects: string[];   // user-added exclusion patterns
 }
 
-const EMPTY_FILTERS: Filters = { dateFrom: "", dateTo: "", datePreset: "", fixDateFrom: "", fixDateTo: "", fixDatePreset: "", projects: [], types: [], statuses: [], tags: [], includedInternalProjects: [], customExcludedProjects: [] };
+const EMPTY_FILTERS: Filters = { dateFrom: "", dateTo: "", datePreset: "", dateFromDT: "", dateToDT: "", fixDateFrom: "", fixDateTo: "", fixDatePreset: "", projects: [], types: [], statuses: [], tags: [], includedInternalProjects: [], customExcludedProjects: [] };
 
 // Internal/product projects excluded by default — each entry is independently togglable
 const INTERNAL_PROJECTS: { label: string; patterns: string[] }[] = [
@@ -58,6 +60,20 @@ const MONTH_MAP: Record<string, string> = {
   Jan:"01",Feb:"02",Mar:"03",Apr:"04",May:"05",Jun:"06",
   Jul:"07",Aug:"08",Sep:"09",Oct:"10",Nov:"11",Dec:"12",
 };
+
+/** Return "YYYY-MM-DDTHH:MM" from a ticket datetime string, or null. */
+function toDateTime(s: string): string | null {
+  if (!s) return null;
+  // "YYYY-MM-DD HH:MM..." or "YYYY-MM-DDTHH:MM..."
+  if (/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/.test(s)) return s.slice(0, 16).replace(" ", "T");
+  // "05-May-2026 10:30:00"
+  const m = s.match(/^(\d{1,2})-([A-Za-z]{3})[a-z]*-(\d{4})(?:\s+(\d{2}):(\d{2}))?/i);
+  if (m) {
+    const mon = MONTH_MAP[m[2].charAt(0).toUpperCase() + m[2].slice(1, 3).toLowerCase()];
+    if (mon) return `${m[3]}-${mon}-${m[1].padStart(2, "0")}T${m[4] ?? "00"}:${m[5] ?? "00"}`;
+  }
+  return null;
+}
 
 /** Return "YYYY-MM-DD" from any date string — avoids all timezone issues. */
 function toDateOnly(s: string): string | null {
@@ -111,7 +127,7 @@ function getPresetCoverageLabel(preset: string, from: string, to: string): strin
   }
 }
 
-function getPresetDates(preset: string): { from: string; to: string } {
+function getPresetDates(preset: string): { from: string; to: string; fromDT?: string; toDT?: string } {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const todayStr = toInputDate(today);
@@ -120,11 +136,11 @@ function getPresetDates(preset: string): { from: string; to: string } {
   switch (preset) {
     case "today":      return { from: todayStr, to: todayStr };
     case "yesterday":  return { from: offset(-1), to: offset(-1) };
-    case "sdp-today":  return { from: offset(-1), to: todayStr };   // 5:31 PM yesterday → 5:30 PM today
-    case "sdp-yday":   return { from: offset(-2), to: offset(-1) }; // 5:31 PM 2 days ago → 5:30 PM yesterday
-    case "sdp-week": { // 5:31 PM last Friday → 5:30 PM this Friday (rolling)
-      const daysToFri = (today.getDay() + 2) % 7; // days back to most recent Friday
-      return { from: offset(-daysToFri - 7), to: offset(-daysToFri) };
+    case "sdp-today":  return { from: offset(-1), to: todayStr,    fromDT: `${offset(-1)}T17:31`, toDT: `${todayStr}T17:30` };
+    case "sdp-yday":   return { from: offset(-2), to: offset(-1),  fromDT: `${offset(-2)}T17:31`, toDT: `${offset(-1)}T17:30` };
+    case "sdp-week": {
+      const daysToFri = (today.getDay() + 2) % 7;
+      return { from: offset(-daysToFri - 7), to: offset(-daysToFri), fromDT: `${offset(-daysToFri - 7)}T17:31`, toDT: `${offset(-daysToFri)}T17:30` };
     }
     case "this-week":  return { from: offset(-6), to: todayStr };
     case "this-month": return { from: toInputDate(new Date(today.getFullYear(), today.getMonth(), 1)), to: todayStr };
@@ -139,9 +155,15 @@ function activeFilterCount(f: Filters) {
 function filterTicketRows(rows: TicketRow[], f: Filters, tagMap: TagMap = {}): TicketRow[] {
   return rows.filter((r) => {
     if (isProjectExcluded(r.project, f.includedInternalProjects, f.customExcludedProjects)) return false;
-    const d = toDateOnly(r.reportedDate);
-    if (d && f.dateFrom && d < f.dateFrom) return false;
-    if (d && f.dateTo   && d > f.dateTo)   return false;
+    if (f.dateFromDT || f.dateToDT) {
+      const dt = toDateTime(r.reportedDate);
+      if (dt && f.dateFromDT && dt < f.dateFromDT) return false;
+      if (dt && f.dateToDT   && dt > f.dateToDT)   return false;
+    } else {
+      const d = toDateOnly(r.reportedDate);
+      if (d && f.dateFrom && d < f.dateFrom) return false;
+      if (d && f.dateTo   && d > f.dateTo)   return false;
+    }
     if (f.projects.length && !f.projects.includes(r.project)) return false;
     if (f.types.length    && !f.types.includes(r.type)) return false;
     if (f.statuses.length && !f.statuses.includes(r.status)) return false;
@@ -156,9 +178,15 @@ function filterTicketRows(rows: TicketRow[], f: Filters, tagMap: TagMap = {}): T
 function filterRecent(rows: RecentTicket[], f: Filters, tagMap: TagMap = {}): RecentTicket[] {
   return rows.filter((r) => {
     if (isProjectExcluded(r.project, f.includedInternalProjects, f.customExcludedProjects)) return false;
-    const d = toDateOnly(r.createdDate);
-    if (d && f.dateFrom && d < f.dateFrom) return false;
-    if (d && f.dateTo   && d > f.dateTo)   return false;
+    if (f.dateFromDT || f.dateToDT) {
+      const dt = toDateTime(r.createdDate);
+      if (dt && f.dateFromDT && dt < f.dateFromDT) return false;
+      if (dt && f.dateToDT   && dt > f.dateToDT)   return false;
+    } else {
+      const d = toDateOnly(r.createdDate);
+      if (d && f.dateFrom && d < f.dateFrom) return false;
+      if (d && f.dateTo   && d > f.dateTo)   return false;
+    }
     if (f.fixDateFrom || f.fixDateTo) {
       const fd = toDateOnly(r.fixedDate);
       if (!fd) return false; // no fix date — exclude when fix date filter is active
@@ -385,8 +413,8 @@ function FilterPanel({
   }
 
   function applyDatePreset(preset: string) {
-    const { from, to } = getPresetDates(preset);
-    onChange({ ...filters, datePreset: preset, dateFrom: from, dateTo: to });
+    const { from, to, fromDT = "", toDT = "" } = getPresetDates(preset);
+    onChange({ ...filters, datePreset: preset, dateFrom: from, dateTo: to, dateFromDT: fromDT, dateToDT: toDT });
   }
 
   function applyFixDatePreset(preset: string) {
@@ -409,7 +437,7 @@ function FilterPanel({
               <button
                 key={p.value}
                 onClick={() => active
-                  ? onChange({ ...filters, datePreset: "", dateFrom: "", dateTo: "" })
+                  ? onChange({ ...filters, datePreset: "", dateFrom: "", dateTo: "", dateFromDT: "", dateToDT: "" })
                   : applyDatePreset(p.value)
                 }
                 className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
@@ -1151,8 +1179,8 @@ export default function Dashboard() {
   const [nextAt, setNextAt]     = useState(Date.now() + REFRESH_MS);
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters]   = useState<Filters>(() => {
-    const { from, to } = getPresetDates("sdp-today");
-    return { ...EMPTY_FILTERS, datePreset: "sdp-today", dateFrom: from, dateTo: to };
+    const { from, to, fromDT = "", toDT = "" } = getPresetDates("sdp-today");
+    return { ...EMPTY_FILTERS, datePreset: "sdp-today", dateFrom: from, dateTo: to, dateFromDT: fromDT, dateToDT: toDT };
   });
   const [username, setUsername] = useState<string | null>(null);
   const [tagMap, setTagMap]     = useState<TagMap>({});
@@ -2154,10 +2182,10 @@ export default function Dashboard() {
                         key={p.value}
                         onClick={() => {
                           if (active) {
-                            setFilters((f) => ({ ...f, datePreset: "", dateFrom: "", dateTo: "" }));
+                            setFilters((f) => ({ ...f, datePreset: "", dateFrom: "", dateTo: "", dateFromDT: "", dateToDT: "" }));
                           } else {
-                            const { from, to } = getPresetDates(p.value);
-                            setFilters((f) => ({ ...f, datePreset: p.value, dateFrom: from, dateTo: to }));
+                            const { from, to, fromDT = "", toDT = "" } = getPresetDates(p.value);
+                            setFilters((f) => ({ ...f, datePreset: p.value, dateFrom: from, dateTo: to, dateFromDT: fromDT, dateToDT: toDT }));
                           }
                         }}
                         className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
@@ -2172,7 +2200,7 @@ export default function Dashboard() {
                   })}
                   {filters.datePreset && (
                     <button
-                      onClick={() => setFilters((f) => ({ ...f, datePreset: "", dateFrom: "", dateTo: "" }))}
+                      onClick={() => setFilters((f) => ({ ...f, datePreset: "", dateFrom: "", dateTo: "", dateFromDT: "", dateToDT: "" }))}
                       className="text-xs text-gray-500 hover:text-gray-300 transition"
                     >
                       Clear
