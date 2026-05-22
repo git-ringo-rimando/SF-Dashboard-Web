@@ -586,20 +586,20 @@ function TicketMiniTable({ rows, title, tagMap = {}, breakdown = false }: { rows
       if (group.length === 0) return [];
       return [
         <tr key={`hdr-${status}`} className={`border-b border-t ${headerCls}`}>
-          <td colSpan={COLS} className="px-4 py-1.5 text-xs font-semibold uppercase tracking-wider">
+          <td colSpan={COLS} className="px-1 py-1 sm:px-4 sm:py-1.5 text-[8px] sm:text-xs font-semibold uppercase tracking-wider">
             {status} <span className="ml-1 opacity-60">({group.length})</span>
           </td>
         </tr>,
         ...group.map((r, i) => (
           <tr key={`${status}-${i}`} className="border-b border-gray-800/50 hover:bg-gray-800/40 transition-colors">
-            <td className="px-4 py-2.5 text-blue-400 font-mono text-xs whitespace-nowrap">{r.documentNo}</td>
-            <td className="px-4 py-2.5 text-gray-300 break-words min-w-[120px]">{r.project}</td>
-            <td className="px-4 py-2.5 whitespace-nowrap">
+            <td className="px-1 py-1 sm:px-4 sm:py-2.5 text-blue-400 font-mono">{r.documentNo}</td>
+            <td className="px-1 py-1 sm:px-4 sm:py-2.5 text-gray-300 break-words">{r.project}</td>
+            <td className="px-1 py-1 sm:px-4 sm:py-2.5 hidden sm:table-cell">
               {(() => { const t = getProjectTag(r.project, tagMap); return t ? <TagBadge tag={t} /> : <span className="text-gray-700">—</span>; })()}
             </td>
-            <td className="px-4 py-2.5 text-gray-400 whitespace-nowrap">{r.type}</td>
-            <td className="px-4 py-2.5"><StatusBadge s={r.status} /></td>
-            <td className="px-4 py-2.5 text-gray-400 text-xs whitespace-nowrap">{r.reportedDate}</td>
+            <td className="px-1 py-1 sm:px-4 sm:py-2.5 text-gray-400">{r.type}</td>
+            <td className="px-1 py-1 sm:px-4 sm:py-2.5"><StatusBadge s={r.status} /></td>
+            <td className="px-1 py-1 sm:px-4 sm:py-2.5 text-gray-400">{r.reportedDate}</td>
           </tr>
         )),
       ];
@@ -607,14 +607,14 @@ function TicketMiniTable({ rows, title, tagMap = {}, breakdown = false }: { rows
   ) : (
     rows.map((r, i) => (
       <tr key={i} className="border-b border-gray-800/50 hover:bg-gray-800/40 transition-colors">
-        <td className="px-4 py-2.5 text-blue-400 font-mono text-xs whitespace-nowrap">{r.documentNo}</td>
-        <td className="px-4 py-2.5 text-gray-300 break-words min-w-[120px]">{r.project}</td>
-        <td className="px-4 py-2.5 whitespace-nowrap">
+        <td className="px-1 py-1 sm:px-4 sm:py-2.5 text-blue-400 font-mono">{r.documentNo}</td>
+        <td className="px-1 py-1 sm:px-4 sm:py-2.5 text-gray-300 break-words">{r.project}</td>
+        <td className="px-1 py-1 sm:px-4 sm:py-2.5 hidden sm:table-cell">
           {(() => { const t = getProjectTag(r.project, tagMap); return t ? <TagBadge tag={t} /> : <span className="text-gray-700">—</span>; })()}
         </td>
-        <td className="px-4 py-2.5 text-gray-400 whitespace-nowrap">{r.type}</td>
-        <td className="px-4 py-2.5"><StatusBadge s={r.status} /></td>
-        <td className="px-4 py-2.5 text-gray-400 text-xs whitespace-nowrap">{r.reportedDate}</td>
+        <td className="px-1 py-1 sm:px-4 sm:py-2.5 text-gray-400">{r.type}</td>
+        <td className="px-1 py-1 sm:px-4 sm:py-2.5"><StatusBadge s={r.status} /></td>
+        <td className="px-1 py-1 sm:px-4 sm:py-2.5 text-gray-400">{r.reportedDate}</td>
       </tr>
     ))
   );
@@ -625,22 +625,20 @@ function TicketMiniTable({ rows, title, tagMap = {}, breakdown = false }: { rows
         <h3 className="font-semibold text-white text-sm">{title}</h3>
         <span className="text-xs text-gray-400">{rows.length} tickets</span>
       </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-gray-800">
-              {["Document No", "Project", "Tag", "Type", "Status", "Reported Date"].map((h) => (
-                <th key={h} className="px-4 py-2 text-left text-xs font-medium text-gray-400 uppercase tracking-wide whitespace-nowrap">{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.length === 0
-              ? <tr><td colSpan={COLS} className="px-4 py-6 text-center text-gray-600 text-sm">No tickets match filters</td></tr>
-              : bodyRows}
-          </tbody>
-        </table>
-      </div>
+      <table className="w-full text-[9px] sm:text-xs table-fixed">
+        <thead>
+          <tr className="border-b border-gray-800">
+            {[["Doc #","w-[20%]"],["Project","w-[30%]"],["Tag","w-[10%] hidden sm:table-cell"],["Type","w-[15%]"],["Status","w-[18%]"],["Date","w-[17%]"]].map(([h, w]) => (
+              <th key={h} className={`${w} px-1 py-1.5 sm:px-4 sm:py-2 text-left text-[8px] sm:text-[10px] font-medium text-gray-400 uppercase tracking-wide`}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.length === 0
+            ? <tr><td colSpan={COLS} className="px-2 py-6 text-center text-gray-600 text-xs">No tickets match filters</td></tr>
+            : bodyRows}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -657,37 +655,39 @@ function ModuleTable({ rows }: { rows: ModuleRow[] }) {
           {collapsed ? "+" : "−"}
         </button>
       </div>
-      {!collapsed && <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-gray-800">
-              {[
-                ["Module", "text-gray-400"], ["Total", "text-gray-400"], ["Critical", "text-red-400"],
-                ["High", "text-orange-400"], ["Medium", "text-yellow-400"], ["Low", "text-blue-400"],
-                ["Open", "text-red-300"], ["Responded", "text-yellow-300"], ["Fixed", "text-green-300"], ["Closed", "text-gray-300"],
-              ].map(([h, c]) => (
-                <th key={h} className={`px-4 py-2 text-left text-xs uppercase tracking-wide font-medium ${c}`}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r, i) => (
-              <tr key={i} className="border-b border-gray-800/50 hover:bg-gray-800/40 transition-colors">
-                <td className="px-4 py-2.5 text-gray-200 font-medium whitespace-nowrap">{r.module}</td>
-                <td className="px-4 py-2.5 text-center text-white font-semibold">{r.total}</td>
-                <td className="px-4 py-2.5 text-center text-red-400">{r.critical || "—"}</td>
-                <td className="px-4 py-2.5 text-center text-orange-400">{r.high || "—"}</td>
-                <td className="px-4 py-2.5 text-center text-yellow-400">{r.medium || "—"}</td>
-                <td className="px-4 py-2.5 text-center text-blue-400">{r.low || "—"}</td>
-                <td className="px-4 py-2.5 text-center">{r.open ? <span className="text-red-400 font-medium">{r.open}</span> : <span className="text-gray-600">—</span>}</td>
-                <td className="px-4 py-2.5 text-center text-yellow-300">{r.responded || "—"}</td>
-                <td className="px-4 py-2.5 text-center text-green-400">{r.fixed || "—"}</td>
-                <td className="px-4 py-2.5 text-center text-gray-400">{r.closed || "—"}</td>
-              </tr>
+      {!collapsed && <table className="w-full text-[9px] sm:text-xs table-fixed">
+        <thead>
+          <tr className="border-b border-gray-800">
+            {[
+              ["Module", "text-gray-400", ""], ["Total", "text-gray-400", ""],
+              ["Crit", "text-red-400", "hidden sm:table-cell"],
+              ["High", "text-orange-400", "hidden sm:table-cell"],
+              ["Med", "text-yellow-400", "hidden sm:table-cell"],
+              ["Low", "text-blue-400", "hidden sm:table-cell"],
+              ["Open", "text-red-300", ""], ["Rspd", "text-yellow-300", ""],
+              ["Fixed", "text-green-300", ""], ["Closed", "text-gray-300", "hidden sm:table-cell"],
+            ].map(([h, c, extra]) => (
+              <th key={h} className={`px-1 py-1.5 sm:px-4 sm:py-2 text-left text-[8px] sm:text-[10px] uppercase tracking-wide font-medium ${c} ${extra}`}>{h}</th>
             ))}
-          </tbody>
-        </table>
-      </div>}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => (
+            <tr key={i} className="border-b border-gray-800/50 hover:bg-gray-800/40 transition-colors">
+              <td className="px-1 py-1 sm:px-4 sm:py-2.5 text-gray-200 font-medium break-words">{r.module}</td>
+              <td className="px-1 py-1 sm:px-4 sm:py-2.5 text-center text-white font-semibold">{r.total}</td>
+              <td className="px-1 py-1 sm:px-4 sm:py-2.5 text-center text-red-400 hidden sm:table-cell">{r.critical || "—"}</td>
+              <td className="px-1 py-1 sm:px-4 sm:py-2.5 text-center text-orange-400 hidden sm:table-cell">{r.high || "—"}</td>
+              <td className="px-1 py-1 sm:px-4 sm:py-2.5 text-center text-yellow-400 hidden sm:table-cell">{r.medium || "—"}</td>
+              <td className="px-1 py-1 sm:px-4 sm:py-2.5 text-center text-blue-400 hidden sm:table-cell">{r.low || "—"}</td>
+              <td className="px-1 py-1 sm:px-4 sm:py-2.5 text-center">{r.open ? <span className="text-red-400 font-medium">{r.open}</span> : <span className="text-gray-600">—</span>}</td>
+              <td className="px-1 py-1 sm:px-4 sm:py-2.5 text-center text-yellow-300">{r.responded || "—"}</td>
+              <td className="px-1 py-1 sm:px-4 sm:py-2.5 text-center text-green-400">{r.fixed || "—"}</td>
+              <td className="px-1 py-1 sm:px-4 sm:py-2.5 text-center text-gray-400 hidden sm:table-cell">{r.closed || "—"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>}
     </div>
   );
 }
@@ -696,32 +696,33 @@ function SeverityTable({ rows }: { rows: SeverityRow[] }) {
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
       <div className="px-5 py-3 border-b border-gray-800 bg-blue-900">
-        <h3 className="font-bold text-white text-[18px] uppercase tracking-wide text-center">By Severity</h3>
+        <h3 className="font-bold text-white text-sm sm:text-[18px] uppercase tracking-wide text-center">By Severity</h3>
       </div>
-      <div>
-        <table className="w-full text-[20px] table-fixed">
-          <thead>
-            <tr className="border-b border-gray-800">
-              {["Severity", "Open", "Responded", "Reopen", "Fixed", "Closed", "Cancelled"].map((h) => (
-                <th key={h} className="px-2 py-2 text-center text-[16px] font-bold text-gray-400 uppercase tracking-wide first:text-left">{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r, i) => (
-              <tr key={i} className="border-b border-gray-800/50 hover:bg-gray-800/40 transition-colors">
-                <td className={`px-2 py-2.5 font-semibold ${SEV_CLS[r.severity] ?? "text-gray-300"}`}>{r.severity}</td>
-                <td className="px-2 py-2.5 text-center">{r.open ? <span className="text-red-400 font-medium">{r.open}</span> : <span className="text-gray-600">—</span>}</td>
-                <td className="px-2 py-2.5 text-center text-yellow-300">{r.responded || "—"}</td>
-                <td className="px-2 py-2.5 text-center text-orange-400">{r.reopen || "—"}</td>
-                <td className="px-2 py-2.5 text-center text-green-400">{r.fixed || "—"}</td>
-                <td className="px-2 py-2.5 text-center text-gray-400">{r.closed || "—"}</td>
-                <td className="px-2 py-2.5 text-center text-purple-400">{r.cancelled || "—"}</td>
-              </tr>
+      <table className="w-full text-[10px] sm:text-sm md:text-[18px] table-fixed">
+        <thead>
+          <tr className="border-b border-gray-800">
+            {[["Sev.","Severity"],["Open","Open"],["Rspd","Responded"],["Reopn","Reopen"],["Fixed","Fixed"],["Closed","Closed"],["Cncld","Cancelled"]].map(([short, full]) => (
+              <th key={full} className="px-0.5 py-1.5 sm:px-2 sm:py-2 text-center text-[8px] sm:text-[11px] md:text-[14px] font-bold text-gray-400 uppercase tracking-wide first:text-left">
+                <span className="sm:hidden">{short}</span>
+                <span className="hidden sm:inline">{full}</span>
+              </th>
             ))}
-          </tbody>
-        </table>
-      </div>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => (
+            <tr key={i} className="border-b border-gray-800/50 hover:bg-gray-800/40 transition-colors">
+              <td className={`px-0.5 py-1.5 sm:px-2 sm:py-2.5 font-semibold ${SEV_CLS[r.severity] ?? "text-gray-300"}`}>{r.severity}</td>
+              <td className="px-0.5 py-1.5 sm:px-2 sm:py-2.5 text-center">{r.open ? <span className="text-red-400 font-medium">{r.open}</span> : <span className="text-gray-600">—</span>}</td>
+              <td className="px-0.5 py-1.5 sm:px-2 sm:py-2.5 text-center text-yellow-300">{r.responded || "—"}</td>
+              <td className="px-0.5 py-1.5 sm:px-2 sm:py-2.5 text-center text-orange-400">{r.reopen || "—"}</td>
+              <td className="px-0.5 py-1.5 sm:px-2 sm:py-2.5 text-center text-green-400">{r.fixed || "—"}</td>
+              <td className="px-0.5 py-1.5 sm:px-2 sm:py-2.5 text-center text-gray-400">{r.closed || "—"}</td>
+              <td className="px-0.5 py-1.5 sm:px-2 sm:py-2.5 text-center text-purple-400">{r.cancelled || "—"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -741,47 +742,56 @@ function RecentTable({ rows, tagMap = {} }: { rows: RecentTicket[]; tagMap?: Tag
           </button>
         </div>
       </div>
-      {!collapsed && <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-gray-800">
-              {["Task", "Ticket No", "Project", "Tag", "Module", "Subject", "Severity", "Created", "Fixed", "Status"].map((h) => (
-                <th key={h} className="px-4 py-2 text-left text-xs text-gray-400 uppercase tracking-wide whitespace-nowrap">{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.length === 0
-              ? <tr><td colSpan={10} className="px-4 py-6 text-center text-gray-600">No tickets match filters</td></tr>
-              : rows.map((r, i) => (
-                <tr key={i} className="border-b border-gray-800/50 hover:bg-gray-800/40 transition-colors">
-                  <td className="px-4 py-2.5 text-gray-400 whitespace-nowrap">{r.task}</td>
-                  <td className="px-4 py-2.5 text-blue-400 font-mono text-xs whitespace-nowrap">{r.ticketNo}</td>
-                  <td className="px-4 py-2.5 text-gray-300 break-words min-w-[120px]">{r.project}</td>
-                  <td className="px-4 py-2.5 whitespace-nowrap">
-                    {(() => { const t = getProjectTag(r.project, tagMap); return t ? <TagBadge tag={t} /> : <span className="text-gray-700">—</span>; })()}
-                  </td>
-                  <td className="px-4 py-2.5 text-gray-400 whitespace-nowrap">{r.module || "—"}</td>
-                  <td className="px-4 py-2.5 text-gray-200 break-words min-w-[200px]">{r.subject}</td>
-                  <td className={`px-4 py-2.5 whitespace-nowrap font-medium ${SEV_CLS[normalizeSeverity(r.severity)] ?? "text-gray-400"}`}>{r.severity}</td>
-                  <td className="px-4 py-2.5 whitespace-nowrap text-xs">
-                    <span className="text-gray-400">{r.createdDate?.split(" ")[0] ?? "—"}</span>
-                    {r.createdDate?.includes(" ") && (
-                      <span className="block text-gray-600">{r.createdDate.split(" ").slice(1).join(" ")}</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-2.5 whitespace-nowrap text-xs">
-                    <span className="text-gray-400">{r.fixedDate?.split(" ")[0] || "—"}</span>
-                    {r.fixedDate?.includes(" ") && (
-                      <span className="block text-gray-600">{r.fixedDate.split(" ").slice(1).join(" ")}</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-2.5 whitespace-nowrap"><StatusBadge s={r.status} /></td>
-                </tr>
-              ))}
-          </tbody>
-        </table>
-      </div>}
+      {!collapsed && <table className="w-full text-[9px] sm:text-xs table-fixed">
+        <thead>
+          <tr className="border-b border-gray-800">
+            {[
+              ["Task", "hidden sm:table-cell"],
+              ["Ticket #", ""],
+              ["Project", ""],
+              ["Tag", "hidden sm:table-cell"],
+              ["Module", "hidden sm:table-cell"],
+              ["Subject", "hidden sm:table-cell"],
+              ["Sev.", ""],
+              ["Created", "hidden sm:table-cell"],
+              ["Fixed", "hidden sm:table-cell"],
+              ["Status", ""],
+            ].map(([h, extra]) => (
+              <th key={h} className={`px-1 py-1.5 sm:px-4 sm:py-2 text-left text-[8px] sm:text-[10px] text-gray-400 uppercase tracking-wide ${extra}`}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.length === 0
+            ? <tr><td colSpan={10} className="px-2 py-6 text-center text-gray-600 text-xs">No tickets match filters</td></tr>
+            : rows.map((r, i) => (
+              <tr key={i} className="border-b border-gray-800/50 hover:bg-gray-800/40 transition-colors">
+                <td className="px-1 py-1 sm:px-4 sm:py-2.5 text-gray-400 hidden sm:table-cell">{r.task}</td>
+                <td className="px-1 py-1 sm:px-4 sm:py-2.5 text-blue-400 font-mono">{r.ticketNo}</td>
+                <td className="px-1 py-1 sm:px-4 sm:py-2.5 text-gray-300 break-words">{r.project}</td>
+                <td className="px-1 py-1 sm:px-4 sm:py-2.5 hidden sm:table-cell">
+                  {(() => { const t = getProjectTag(r.project, tagMap); return t ? <TagBadge tag={t} /> : <span className="text-gray-700">—</span>; })()}
+                </td>
+                <td className="px-1 py-1 sm:px-4 sm:py-2.5 text-gray-400 hidden sm:table-cell">{r.module || "—"}</td>
+                <td className="px-1 py-1 sm:px-4 sm:py-2.5 text-gray-200 break-words hidden sm:table-cell">{r.subject}</td>
+                <td className={`px-1 py-1 sm:px-4 sm:py-2.5 font-medium ${SEV_CLS[normalizeSeverity(r.severity)] ?? "text-gray-400"}`}>{r.severity}</td>
+                <td className="px-1 py-1 sm:px-4 sm:py-2.5 hidden sm:table-cell">
+                  <span className="text-gray-400">{r.createdDate?.split(" ")[0] ?? "—"}</span>
+                  {r.createdDate?.includes(" ") && (
+                    <span className="block text-gray-600">{r.createdDate.split(" ").slice(1).join(" ")}</span>
+                  )}
+                </td>
+                <td className="px-1 py-1 sm:px-4 sm:py-2.5 hidden sm:table-cell">
+                  <span className="text-gray-400">{r.fixedDate?.split(" ")[0] || "—"}</span>
+                  {r.fixedDate?.includes(" ") && (
+                    <span className="block text-gray-600">{r.fixedDate.split(" ").slice(1).join(" ")}</span>
+                  )}
+                </td>
+                <td className="px-1 py-1 sm:px-4 sm:py-2.5"><StatusBadge s={r.status} /></td>
+              </tr>
+            ))}
+        </tbody>
+      </table>}
     </div>
   );
 }
@@ -2178,38 +2188,49 @@ export default function Dashboard() {
               {/* By Product */}
               <div className="mt-4 bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
                 <div className="px-5 py-3 border-b border-gray-800" style={{ background: "linear-gradient(to right, #7f1d1d, #1e3a8a, #7c2d12)" }}>
-                  <h3 className="font-bold text-white text-[18px] uppercase tracking-wide text-center">By Product</h3>
+                  <h3 className="font-bold text-white text-sm sm:text-[18px] uppercase tracking-wide text-center">By Product</h3>
                 </div>
-                <div>
-                  <table className="w-full text-[20px] table-fixed">
-                    <thead>
-                      <tr className="border-b border-gray-800">
-                        {["Product", "Total", "Open", "Responded", "Fixed", "Closed", "Unresolved", "Unresponded", "Cancelled"].map((h) => (
-                          <th key={h} className="px-2 py-2 text-center text-[16px] font-bold text-gray-400 uppercase tracking-wide first:text-left">{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {PRODUCT_TAGS.map((tag) => {
-                        const c = tagTotals[tag];
-                        const rowBg = tag === "Sunfish 6" ? "bg-red-900/40" : tag === "Sunfish 7" ? "bg-blue-900/40" : "bg-orange-900/40";
-                        return (
-                          <tr key={tag} className={`border-b border-gray-800/50 transition-colors ${rowBg}`}>
-                            <td className="px-2 py-2.5"><TagBadge tag={tag} /></td>
-                            <td className="px-2 py-2.5 text-center text-white font-semibold">{c.total}</td>
-                            <td className="px-2 py-2.5 text-center">{c.open ? <span className="text-red-400 font-medium">{c.open}</span> : <span className="text-gray-600">—</span>}</td>
-                            <td className="px-2 py-2.5 text-center text-yellow-300">{c.responded || <span className="text-gray-600">—</span>}</td>
-                            <td className="px-2 py-2.5 text-center text-green-400">{c.fixed || <span className="text-gray-600">—</span>}</td>
-                            <td className="px-2 py-2.5 text-center text-gray-400">{c.closed || <span className="text-gray-600">—</span>}</td>
-                            <td className="px-2 py-2.5 text-center">{c.unresolved ? <span className="text-red-400 font-medium">{c.unresolved}</span> : <span className="text-gray-600">—</span>}</td>
-                            <td className="px-2 py-2.5 text-center">{c.unresponded ? <span className="text-orange-400 font-medium">{c.unresponded}</span> : <span className="text-gray-600">—</span>}</td>
-                            <td className="px-2 py-2.5 text-center text-purple-400">{c.cancelled || <span className="text-gray-600">—</span>}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+                <table className="w-full text-[10px] sm:text-sm md:text-[18px] table-fixed">
+                  <thead>
+                    <tr className="border-b border-gray-800">
+                      {[
+                        ["Product","Product",""],
+                        ["Total","Total",""],
+                        ["Open","Open",""],
+                        ["Rspd","Responded","hidden sm:table-cell"],
+                        ["Fixed","Fixed","hidden sm:table-cell"],
+                        ["Closed","Closed","hidden sm:table-cell"],
+                        ["Unrslvd","Unresolved",""],
+                        ["Unresp","Unresponded",""],
+                        ["Cncld","Cancelled","hidden sm:table-cell"],
+                      ].map(([short, full, extra]) => (
+                        <th key={full} className={`px-0.5 py-1.5 sm:px-2 sm:py-2 text-center text-[8px] sm:text-[11px] md:text-[14px] font-bold text-gray-400 uppercase tracking-wide first:text-left ${extra}`}>
+                          <span className="sm:hidden">{short}</span>
+                          <span className="hidden sm:inline">{full}</span>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {PRODUCT_TAGS.map((tag) => {
+                      const c = tagTotals[tag];
+                      const rowBg = tag === "Sunfish 6" ? "bg-red-900/40" : tag === "Sunfish 7" ? "bg-blue-900/40" : "bg-orange-900/40";
+                      return (
+                        <tr key={tag} className={`border-b border-gray-800/50 transition-colors ${rowBg}`}>
+                          <td className="px-0.5 py-1.5 sm:px-2 sm:py-2.5"><TagBadge tag={tag} /></td>
+                          <td className="px-0.5 py-1.5 sm:px-2 sm:py-2.5 text-center text-white font-semibold">{c.total}</td>
+                          <td className="px-0.5 py-1.5 sm:px-2 sm:py-2.5 text-center">{c.open ? <span className="text-red-400 font-medium">{c.open}</span> : <span className="text-gray-600">—</span>}</td>
+                          <td className="px-0.5 py-1.5 sm:px-2 sm:py-2.5 text-center text-yellow-300 hidden sm:table-cell">{c.responded || <span className="text-gray-600">—</span>}</td>
+                          <td className="px-0.5 py-1.5 sm:px-2 sm:py-2.5 text-center text-green-400 hidden sm:table-cell">{c.fixed || <span className="text-gray-600">—</span>}</td>
+                          <td className="px-0.5 py-1.5 sm:px-2 sm:py-2.5 text-center text-gray-400 hidden sm:table-cell">{c.closed || <span className="text-gray-600">—</span>}</td>
+                          <td className="px-0.5 py-1.5 sm:px-2 sm:py-2.5 text-center">{c.unresolved ? <span className="text-red-400 font-medium">{c.unresolved}</span> : <span className="text-gray-600">—</span>}</td>
+                          <td className="px-0.5 py-1.5 sm:px-2 sm:py-2.5 text-center">{c.unresponded ? <span className="text-orange-400 font-medium">{c.unresponded}</span> : <span className="text-gray-600">—</span>}</td>
+                          <td className="px-0.5 py-1.5 sm:px-2 sm:py-2.5 text-center text-purple-400 hidden sm:table-cell">{c.cancelled || <span className="text-gray-600">—</span>}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             </section>
 
