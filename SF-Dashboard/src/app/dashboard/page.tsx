@@ -80,10 +80,36 @@ function toInputDate(d: Date) {
 const DATE_PRESETS = [
   { value: "today",      label: "Today" },
   { value: "yesterday",  label: "Yesterday" },
+  { value: "sdp-today",  label: "SDP Today" },
+  { value: "sdp-yday",   label: "SDP Yday" },
+  { value: "sdp-week",   label: "SDP Week" },
   { value: "this-week",  label: "Last 7 Days" },
   { value: "this-month", label: "This Month" },
   { value: "custom",     label: "Custom" },
 ] as const;
+
+function getPresetCoverageLabel(preset: string, from: string, to: string): string {
+  const fmt = (s: string) => {
+    if (!s) return "";
+    const [y, m, d] = s.split("-").map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  };
+  switch (preset) {
+    case "sdp-today":  return `${fmt(from)} 5:31 PM – ${fmt(to)} 5:30 PM`;
+    case "sdp-yday":   return `${fmt(from)} 5:31 PM – ${fmt(to)} 5:30 PM`;
+    case "sdp-week":   return `${fmt(from)} 5:31 PM – ${fmt(to)} 5:30 PM`;
+    case "today":      return fmt(from);
+    case "yesterday":  return fmt(from);
+    case "this-week":  return `${fmt(from)} – ${fmt(to)}`;
+    case "this-month": return `${fmt(from)} – ${fmt(to)}`;
+    default:
+      if (from && to && from === to) return fmt(from);
+      if (from && to)  return `${fmt(from)} – ${fmt(to)}`;
+      if (from)        return `${fmt(from)} and after`;
+      if (to)          return `Up to ${fmt(to)}`;
+      return "";
+  }
+}
 
 function getPresetDates(preset: string): { from: string; to: string } {
   const today = new Date();
@@ -94,6 +120,12 @@ function getPresetDates(preset: string): { from: string; to: string } {
   switch (preset) {
     case "today":      return { from: todayStr, to: todayStr };
     case "yesterday":  return { from: offset(-1), to: offset(-1) };
+    case "sdp-today":  return { from: offset(-1), to: todayStr };   // 5:31 PM yesterday → 5:30 PM today
+    case "sdp-yday":   return { from: offset(-2), to: offset(-1) }; // 5:31 PM 2 days ago → 5:30 PM yesterday
+    case "sdp-week": { // 5:31 PM last Friday → 5:30 PM this Friday (rolling)
+      const daysToFri = (today.getDay() + 2) % 7; // days back to most recent Friday
+      return { from: offset(-daysToFri - 7), to: offset(-daysToFri) };
+    }
     case "this-week":  return { from: offset(-6), to: todayStr };
     case "this-month": return { from: toInputDate(new Date(today.getFullYear(), today.getMonth(), 1)), to: todayStr };
     default:           return { from: "", to: "" };
@@ -1119,8 +1151,8 @@ export default function Dashboard() {
   const [nextAt, setNextAt]     = useState(Date.now() + REFRESH_MS);
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters]   = useState<Filters>(() => {
-    const { from, to } = getPresetDates("today");
-    return { ...EMPTY_FILTERS, datePreset: "today", dateFrom: from, dateTo: to };
+    const { from, to } = getPresetDates("sdp-today");
+    return { ...EMPTY_FILTERS, datePreset: "sdp-today", dateFrom: from, dateTo: to };
   });
   const [username, setUsername] = useState<string | null>(null);
   const [tagMap, setTagMap]     = useState<TagMap>({});
@@ -2148,6 +2180,14 @@ export default function Dashboard() {
                   )}
                 </div>
               </div>
+              {(filters.datePreset || filters.dateFrom || filters.dateTo) && (
+                <p className="text-[11px] -mt-1 mb-3">
+                  <span className="text-gray-600">Coverage:</span>{" "}
+                  <span className="text-teal-400/90 font-medium">
+                    {getPresetCoverageLabel(filters.datePreset, filters.dateFrom, filters.dateTo)}
+                  </span>
+                </p>
+              )}
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
                 {/* Stat cards */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
@@ -2237,10 +2277,16 @@ export default function Dashboard() {
             {/* Attention Required */}
             {(filteredUnresolved.length > 0 || filteredUnresponded.length > 0) && (
               <section>
-                <div className="flex items-center gap-3 mb-3">
+                <div className="flex items-center gap-3 mb-1">
                   <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-widest">Attention Required</h2>
                   {isFiltered && <span className="text-xs text-teal-400 border border-teal-700 rounded px-2 py-0.5">{filterLabel}</span>}
                 </div>
+                {(filters.datePreset || filters.dateFrom || filters.dateTo) && (
+                  <p className="text-[11px] mb-3">
+                    <span className="text-gray-600">Coverage:</span>{" "}
+                    <span className="text-teal-400/90 font-medium">{getPresetCoverageLabel(filters.datePreset, filters.dateFrom, filters.dateTo)}</span>
+                  </p>
+                )}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   <TicketMiniTable rows={filteredUnresolved}  title="Unresolved Tickets"  tagMap={tagMap} breakdown />
                   <TicketMiniTable rows={filteredUnresponded} title="Unresponded Tickets" tagMap={tagMap} />
@@ -2251,7 +2297,7 @@ export default function Dashboard() {
             {/* Statistics — module breakdown only (severity is beside Overview) */}
             {displayModuleBreakdown.length > 0 && (
               <section>
-                <div className="flex items-center gap-3 mb-3">
+                <div className="flex items-center gap-3 mb-1">
                   <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-widest">Statistics</h2>
                   {isFiltered
                     ? <span className="text-xs text-teal-400 border border-teal-700 rounded px-2 py-0.5">{filterLabel}</span>
@@ -2262,6 +2308,12 @@ export default function Dashboard() {
                     )
                   }
                 </div>
+                {(filters.datePreset || filters.dateFrom || filters.dateTo) && (
+                  <p className="text-[11px] mb-3">
+                    <span className="text-gray-600">Coverage:</span>{" "}
+                    <span className="text-teal-400/90 font-medium">{getPresetCoverageLabel(filters.datePreset, filters.dateFrom, filters.dateTo)}</span>
+                  </p>
+                )}
                 <ModuleTable rows={displayModuleBreakdown} />
               </section>
             )}
@@ -2269,10 +2321,16 @@ export default function Dashboard() {
             {/* Recent Tickets */}
             {cache.recentTickets.length > 0 && (
               <section>
-                <div className="flex items-center gap-3 mb-3">
+                <div className="flex items-center gap-3 mb-1">
                   <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-widest">Recent Tickets</h2>
                   {isFiltered && <span className="text-xs text-teal-400 border border-teal-700 rounded px-2 py-0.5">{filterLabel}</span>}
                 </div>
+                {(filters.datePreset || filters.dateFrom || filters.dateTo) && (
+                  <p className="text-[11px] mb-3">
+                    <span className="text-gray-600">Coverage:</span>{" "}
+                    <span className="text-teal-400/90 font-medium">{getPresetCoverageLabel(filters.datePreset, filters.dateFrom, filters.dateTo)}</span>
+                  </p>
+                )}
                 <RecentTable rows={filteredRecent} tagMap={tagMap} />
               </section>
             )}
