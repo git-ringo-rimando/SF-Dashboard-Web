@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import type { DashboardCache, TicketRow, ModuleRow, SeverityRow, RecentTicket, ProductTag, TagMap } from "@/lib/store";
+import type { SummaryData } from "@/lib/summary";
+import { PERMANENT_RECIPIENTS } from "@/lib/summary";
 
 const REFRESH_MS = 5 * 60 * 1000;
 
@@ -127,9 +129,18 @@ function getPresetCoverageLabel(preset: string, from: string, to: string): strin
   }
 }
 
+// All date presets are anchored to Philippine time (Asia/Manila, UTC+8),
+// regardless of the viewer's machine timezone, because SDP ticket timestamps
+// are in PHT. The 5:30 PM SDP cutoffs below are likewise PHT wall-clock times.
+const FILTER_TZ = "Asia/Manila";
+
 function getPresetDates(preset: string): { from: string; to: string; fromDT?: string; toDT?: string } {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  // Jakarta's current calendar date ("YYYY-MM-DD"), then rebuild as a local
+  // midnight Date so the existing day arithmetic (setDate / getDay) stays valid.
+  const [y, mo, d] = new Intl.DateTimeFormat("en-CA", {
+    timeZone: FILTER_TZ, year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(new Date()).split("-").map(Number);
+  const today = new Date(y, mo - 1, d);
   const todayStr = toInputDate(today);
   const offset = (n: number) => { const d = new Date(today); d.setDate(today.getDate() + n); return toInputDate(d); };
 
@@ -974,14 +985,14 @@ function TicketLocator() {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center px-4 sm:pt-16">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setOpen(false)} />
 
       {/* Modal */}
-      <div className="relative w-full max-w-2xl max-h-[90vh] sm:max-h-none bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl overflow-hidden">
+      <div className="relative w-full max-w-2xl max-h-[90vh] flex flex-col bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800 shrink-0">
           <div className="flex items-center gap-2">
             <svg className="w-4 h-4 text-teal-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -993,7 +1004,7 @@ function TicketLocator() {
         </div>
 
         {/* Search bar */}
-        <form onSubmit={handleSubmit} className="flex gap-2 p-4 border-b border-gray-800">
+        <form onSubmit={handleSubmit} className="flex gap-2 p-4 border-b border-gray-800 shrink-0">
           <input
             ref={inputRef}
             value={input}
@@ -1013,7 +1024,7 @@ function TicketLocator() {
         </form>
 
         {/* Results */}
-        <div className="max-h-[60vh] overflow-y-auto p-4 space-y-4">
+        <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
           {/* Cache result */}
           {cacheState !== "idle" && (
             <div>
@@ -1162,6 +1173,204 @@ function TagManager({
   );
 }
 
+function SummaryModal({ onClose, summary, userEmail }: { onClose: () => void; summary: SummaryData; userEmail: string | null }) {
+  // Always-on recipients (the two ops addresses + the logged-in user). Shown as
+  // locked chips and merged in server-side, so they can't be removed.
+  const lockedRecipients = (() => {
+    const list = [...PERMANENT_RECIPIENTS];
+    if (userEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(userEmail) &&
+        !list.some((e) => e.toLowerCase() === userEmail.toLowerCase())) {
+      list.push(userEmail);
+    }
+    return list;
+  })();
+  const isLocked = (email: string) => lockedRecipients.some((e) => e.toLowerCase() === email.trim().toLowerCase());
+  const [recipients, setRecipients] = useState<string[]>([]);
+  const [input, setInput]           = useState("");
+  const [scheduleEnabled, setScheduleEnabled] = useState(false);
+  const [emailReady, setEmailReady] = useState(true);
+  const [loading, setLoading]       = useState(true);
+  const [busy, setBusy]             = useState(false);
+  const [status, setStatus]         = useState<{ kind: "ok" | "err"; msg: string } | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("/api/summary-settings");
+        const data = await res.json();
+        setRecipients(data.settings?.recipients ?? []);
+        setScheduleEnabled(!!data.settings?.scheduleEnabled);
+        setEmailReady(data.emailConfigured !== false);
+      } catch { /* keep defaults */ }
+      setLoading(false);
+    })();
+  }, []);
+
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  function addEmails(raw: string) {
+    const parts = raw.split(/[,;\s]+/).map((p) => p.trim()).filter(Boolean);
+    const valid: string[] = [];
+    for (const p of parts) {
+      if (!EMAIL_RE.test(p)) { setStatus({ kind: "err", msg: `Invalid email: ${p}` }); continue; }
+      if (isLocked(p)) continue; // already a permanent recipient
+      if (!recipients.includes(p) && !valid.includes(p)) valid.push(p);
+    }
+    if (valid.length) {
+      setRecipients((r) => [...r, ...valid]);
+      setStatus(null);
+    }
+    setInput("");
+  }
+
+  async function save(): Promise<boolean> {
+    setBusy(true);
+    try {
+      const res = await fetch("/api/summary-settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recipients, scheduleEnabled }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setStatus({ kind: "err", msg: data.error ?? "Failed to save." }); return false; }
+      setStatus({ kind: "ok", msg: "Settings saved." });
+      return true;
+    } catch {
+      setStatus({ kind: "err", msg: "Failed to save settings." });
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function sendNow() {
+    // Fold any text still in the input box into the list before sending.
+    const typed = input.split(/[,;\s]+/).map((p) => p.trim()).filter(Boolean);
+    const bad = typed.find((p) => !EMAIL_RE.test(p));
+    if (bad) { setStatus({ kind: "err", msg: `Invalid email: ${bad}` }); return; }
+    const list = [...new Set([...recipients, ...typed])];
+    if (typed.length) { setRecipients(list); setInput(""); }
+    if (!list.length) { setStatus({ kind: "err", msg: "Add at least one recipient." }); return; }
+    setBusy(true);
+    setStatus(null);
+    try {
+      const res = await fetch("/api/send-summary", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recipients: list, summary }),
+      });
+      const data = await res.json();
+      if (!res.ok) setStatus({ kind: "err", msg: data.error ?? "Failed to send." });
+      else setStatus({ kind: "ok", msg: `Summary sent to ${data.sent} recipient${data.sent === 1 ? "" : "s"}.` });
+    } catch {
+      setStatus({ kind: "err", msg: "Failed to send summary." });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center pt-16 px-4">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full max-w-lg bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800">
+          <span className="font-semibold text-white text-sm">Email Summary</span>
+          <button onClick={onClose} className="text-gray-500 hover:text-white transition text-lg leading-none">×</button>
+        </div>
+
+        <div className="p-5 space-y-4">
+          <div className="text-xs text-gray-400 bg-gray-800/60 border border-gray-700 rounded-lg px-3 py-2">
+            Sends the current view: <span className="text-teal-300 font-medium">{summary.filterLabel}</span>
+            {" "}— {summary.totals.all} ticket{summary.totals.all === 1 ? "" : "s"}, {summary.totals.open} open, {summary.totals.unresolved} unresolved.
+          </div>
+
+          {!emailReady && (
+            <div className="text-xs text-amber-300 bg-amber-950/40 border border-amber-900/50 rounded-lg px-3 py-2">
+              Email isn&apos;t configured on the server yet. Set the <code>SMTP_*</code> environment variables to enable sending.
+            </div>
+          )}
+
+          <div>
+            <label className="block text-xs text-gray-400 mb-1.5">Recipients</label>
+            <div className="flex flex-wrap gap-1.5 mb-2">
+              {/* Permanent recipients — always included, not removable */}
+              {lockedRecipients.map((r) => (
+                <span key={`lock-${r}`} title="Always included" className="inline-flex items-center gap-1 text-xs bg-teal-900/30 border border-teal-800/60 text-teal-200 rounded-full px-2.5 py-1">
+                  <svg className="w-3 h-3 text-teal-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                      d="M12 11c0-1.1.9-2 2-2m-9 2h14a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm10 0V7a4 4 0 00-8 0v4" />
+                  </svg>
+                  {r}
+                </span>
+              ))}
+              {/* Custom recipients — removable (locked ones filtered out) */}
+              {recipients.filter((r) => !isLocked(r)).map((r) => (
+                <span key={r} className="inline-flex items-center gap-1 text-xs bg-gray-800 border border-gray-700 text-gray-200 rounded-full pl-2.5 pr-1.5 py-1">
+                  {r}
+                  <button
+                    onClick={() => setRecipients((list) => list.filter((e) => e !== r))}
+                    className="text-gray-500 hover:text-white transition leading-none"
+                  >×</button>
+                </span>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <input
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === ",") { e.preventDefault(); addEmails(input); } }}
+                placeholder="name@company.com"
+                className="flex-1 bg-gray-800 border border-gray-700 text-gray-200 text-xs rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+              />
+              <button
+                onClick={() => addEmails(input)}
+                className="text-xs px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-gray-300 hover:border-gray-500 transition"
+              >Add</button>
+            </div>
+          </div>
+
+          <label className="flex items-center gap-2.5 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={scheduleEnabled}
+              onChange={(e) => setScheduleEnabled(e.target.checked)}
+              className="w-4 h-4 accent-teal-600"
+            />
+            <span className="text-xs text-gray-300">Send a summary automatically every day</span>
+          </label>
+
+          {status && (
+            <div className={`text-xs rounded-lg px-3 py-2 border ${
+              status.kind === "ok"
+                ? "text-teal-300 bg-teal-950/40 border-teal-900/50"
+                : "text-red-300 bg-red-950/40 border-red-900/50"
+            }`}>
+              {status.msg}
+            </div>
+          )}
+
+          <div className="flex items-center justify-between gap-2 pt-1">
+            <button
+              onClick={sendNow}
+              disabled={busy || !emailReady}
+              className="text-xs px-3.5 py-2 rounded-lg bg-teal-600 hover:bg-teal-500 text-white font-medium disabled:opacity-50 transition"
+            >
+              {busy ? "Working…" : "Send now"}
+            </button>
+            <button
+              onClick={save}
+              disabled={busy}
+              className="text-xs px-3.5 py-2 rounded-lg bg-gray-800 border border-gray-700 text-gray-200 hover:border-gray-500 disabled:opacity-50 transition"
+            >
+              Save settings
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Module-level constants — defined once, never recreated on re-renders
 const SEV_ORDER: Record<string, number>    = { Critical: 0, High: 1, Medium: 2, Low: 3 };
 const STATUS_ORDER: Record<string, number> = { Open: 0, Reopen: 1, Responded: 2, Fixed: 3, Closed: 4, Cancelled: 5 };
@@ -1185,6 +1394,7 @@ export default function Dashboard() {
   const [username, setUsername] = useState<string | null>(null);
   const [tagMap, setTagMap]     = useState<TagMap>({});
   const [showTagManager, setShowTagManager] = useState(false);
+  const [showSummary, setShowSummary] = useState(false);
   const [newOpenTickets, setNewOpenTickets] = useState<RecentTicket[]>([]);
   const [showNewTicketModal, setShowNewTicketModal] = useState(false);
   const [showOpenTicketsModal, setShowOpenTicketsModal] = useState(false);
@@ -1618,6 +1828,29 @@ export default function Dashboard() {
       .filter((r) => r && Object.values(r).slice(1).some(Boolean));
   }, [isFiltered, filteredRecent, cache]);
 
+  // Normalized payload for the email summary — mirrors the on-screen filtered view.
+  const summaryData = useMemo<SummaryData>(() => {
+    const coverage = filters.datePreset && filters.datePreset !== "custom"
+      ? getPresetCoverageLabel(filters.datePreset, filters.dateFrom, filters.dateTo)
+      : (filters.dateFrom || filters.dateTo
+          ? [filters.dateFrom, filters.dateTo].filter(Boolean).join(" → ")
+          : "");
+    return {
+      scrapedAt: cache?.scrapedAt ?? "",
+      filterLabel: isFiltered ? filterLabel : "All data",
+      coverage: coverage || undefined,
+      statisticPeriod: cache?.statisticPeriod,
+      error: cache?.error ?? null,
+      totals: displayTotals,
+      severityBreakdown: displaySeverityBreakdown,
+      moduleBreakdown: displayModuleBreakdown,
+      recentTickets: filteredRecent.slice(0, 30).map((t) => ({
+        ticketNo: t.ticketNo, project: t.project, subject: t.subject,
+        severity: t.severity, status: t.status,
+      })),
+    };
+  }, [cache, isFiltered, filterLabel, filters, displayTotals, displaySeverityBreakdown, displayModuleBreakdown, filteredRecent]);
+
   const tagTotals = useMemo(() => {
     const UNRESOLVED = new Set(["Open", "Responded", "Reopen"]);
     const empty = () => ({ total: 0, open: 0, responded: 0, fixed: 0, closed: 0, unresolved: 0, unresponded: 0, reopen: 0, cancelled: 0 });
@@ -1992,6 +2225,7 @@ export default function Dashboard() {
           onClose={() => setShowTagManager(false)}
         />
       )}
+      {showSummary && <SummaryModal summary={summaryData} userEmail={username} onClose={() => setShowSummary(false)} />}
       {/* Header */}
       <header className="border-b border-gray-800 bg-gray-900/60 backdrop-blur sticky top-0 z-10">
         <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 py-2 sm:py-3 flex items-center justify-between gap-2 sm:gap-4">
@@ -2022,6 +2256,19 @@ export default function Dashboard() {
                   d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
               </svg>
               <span className="hidden sm:inline">Tags</span>
+            </button>
+
+            <button
+              onClick={() => setShowSummary(true)}
+              className="hidden sm:flex items-center gap-1.5 text-xs px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg bg-gray-800 border border-gray-700
+                         text-gray-400 hover:border-gray-500 hover:text-gray-200 transition"
+              title="Email summary"
+            >
+              <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
+              <span className="hidden sm:inline">Summary</span>
             </button>
 
             {/* Filter toggle */}

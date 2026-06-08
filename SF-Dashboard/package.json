@@ -21,6 +21,7 @@
     "bcryptjs": "^3.0.3",
     "next": "^16.2.4",
     "node-cron": "^4.2.1",
+    "nodemailer": "^8.0.10",
     "postcss": "^8.5.13",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
@@ -30,6 +31,7 @@
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
     "@types/node-cron": "^3.0.11",
+    "@types/nodemailer": "^8.0.0",
     "canvas": "^3.2.3",
     "cross-env": "^10.1.0"
   }
