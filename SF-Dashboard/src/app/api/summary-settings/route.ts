@@ -23,9 +23,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `Invalid email address: ${invalid}` }, { status: 400 });
   }
 
-  await saveSummarySettings(username, {
-    recipients,
-    scheduleEnabled: !!body.scheduleEnabled,
-  });
+  await saveSummarySettings(username, { recipients });
   return NextResponse.json({ ok: true });
 }

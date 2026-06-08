@@ -49,13 +49,18 @@ export async function POST(req: NextRequest) {
     summary = cacheToSummaryData(cache);
   }
 
-  const displayName = (await loadCredentials(username))?.username ?? username;
+  const creds = await loadCredentials(username);
+  const displayName = creds?.username ?? username;
+  const auth = creds?.zimbraPassword
+    ? { user: creds.username, pass: creds.zimbraPassword }
+    : undefined;
 
   try {
     await sendMail({
       to: recipients,
       subject: summarySubject(summary, displayName),
       html: renderSummaryHtml(summary, displayName),
+      auth,
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

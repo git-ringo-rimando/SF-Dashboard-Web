@@ -1187,7 +1187,6 @@ function SummaryModal({ onClose, summary, userEmail }: { onClose: () => void; su
   const isLocked = (email: string) => lockedRecipients.some((e) => e.toLowerCase() === email.trim().toLowerCase());
   const [recipients, setRecipients] = useState<string[]>([]);
   const [input, setInput]           = useState("");
-  const [scheduleEnabled, setScheduleEnabled] = useState(false);
   const [emailReady, setEmailReady] = useState(true);
   const [loading, setLoading]       = useState(true);
   const [busy, setBusy]             = useState(false);
@@ -1199,7 +1198,6 @@ function SummaryModal({ onClose, summary, userEmail }: { onClose: () => void; su
         const res = await fetch("/api/summary-settings");
         const data = await res.json();
         setRecipients(data.settings?.recipients ?? []);
-        setScheduleEnabled(!!data.settings?.scheduleEnabled);
         setEmailReady(data.emailConfigured !== false);
       } catch { /* keep defaults */ }
       setLoading(false);
@@ -1229,7 +1227,7 @@ function SummaryModal({ onClose, summary, userEmail }: { onClose: () => void; su
       const res = await fetch("/api/summary-settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ recipients, scheduleEnabled }),
+        body: JSON.stringify({ recipients }),
       });
       const data = await res.json();
       if (!res.ok) { setStatus({ kind: "err", msg: data.error ?? "Failed to save." }); return false; }
@@ -1328,16 +1326,6 @@ function SummaryModal({ onClose, summary, userEmail }: { onClose: () => void; su
               >Add</button>
             </div>
           </div>
-
-          <label className="flex items-center gap-2.5 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={scheduleEnabled}
-              onChange={(e) => setScheduleEnabled(e.target.checked)}
-              className="w-4 h-4 accent-teal-600"
-            />
-            <span className="text-xs text-gray-300">Send a summary automatically every day</span>
-          </label>
 
           {status && (
             <div className={`text-xs rounded-lg px-3 py-2 border ${

@@ -324,7 +324,7 @@ export async function scrape(
     if (!auth.ok) throw new Error(auth.error);
     // Persist the fresh token/cookie so subsequent scrapes can reuse them
     const creds = await loadCredentials(username);
-    if (creds) await saveCredentials(creds.username, creds.password, auth.memberId, auth.cookie, auth.token);
+    if (creds) await saveCredentials(creds.username, creds.password, auth.memberId, auth.cookie, auth.token, creds.zimbraPassword);
     return auth;
   };
 

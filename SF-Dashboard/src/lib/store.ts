@@ -56,10 +56,11 @@ export interface Credentials {
   memberId?: string;
   cookie?: string;
   token?: string;
+  zimbraPassword?: string;  // for sending summary emails from the user's own mailbox
 }
 
-export async function saveCredentials(username: string, password: string, memberId?: string, cookie?: string, token?: string): Promise<void> {
-  const encrypted = encrypt(JSON.stringify({ username, password, memberId, cookie, token }));
+export async function saveCredentials(username: string, password: string, memberId?: string, cookie?: string, token?: string, zimbraPassword?: string): Promise<void> {
+  const encrypted = encrypt(JSON.stringify({ username, password, memberId, cookie, token, zimbraPassword }));
   writeLocal(credsFile(username), encrypted);
   await redisSet(`sf:creds:${sanitize(username)}`, encrypted, 90 * 86400);
 }
@@ -204,25 +205,6 @@ async function redisDel(...keys: string[]): Promise<void> {
   } catch {}
 }
 
-// Generic command runner — returns the `result` field, or null on any failure.
-async function redisCmd<T = unknown>(...args: (string | number)[]): Promise<T | null> {
-  if (!REDIS_URL || !REDIS_TOKEN) return null;
-  try {
-    const res = await fetch(REDIS_URL, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${REDIS_TOKEN}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(args),
-    });
-    const data = await res.json() as { result: T };
-    return data.result ?? null;
-  } catch {
-    return null;
-  }
-}
-
 // ── Cache ────────────────────────────────────────────────────────────────────
 
 // In-process cache keyed by username — skips disk on repeated /api/data polls.
@@ -319,31 +301,18 @@ export async function loadProgress(username: string): Promise<ScrapeProgress | n
 // ── Email summary settings ────────────────────────────────────────────────────
 
 export interface SummarySettings {
-  recipients: string[];      // email addresses
-  scheduleEnabled: boolean;  // include in the daily cron send
+  recipients: string[];      // saved custom recipients (in addition to permanent ones)
 }
 
-const DEFAULT_SUMMARY_SETTINGS: SummarySettings = { recipients: [], scheduleEnabled: false };
-
-// Registry of users opted into the daily send — lets the cron job find them
-// without scanning every mailbox. Backed by a Redis set + local dir scan.
-const SCHEDULE_SET_KEY = "sf:summary:scheduled";
+const DEFAULT_SUMMARY_SETTINGS: SummarySettings = { recipients: [] };
 
 export async function saveSummarySettings(username: string, settings: SummarySettings): Promise<void> {
   const clean: SummarySettings = {
     recipients: settings.recipients.map((r) => r.trim()).filter(Boolean),
-    scheduleEnabled: !!settings.scheduleEnabled,
   };
   const json = JSON.stringify(clean, null, 2);
   writeLocal(summaryFile(username), json);
   await redisSet(`sf:summary:${sanitize(username)}`, json, 365 * 86400);
-  // Permanent recipients guarantee a non-empty list, so enabling the schedule is
-  // enough to opt in — no custom recipients required.
-  if (clean.scheduleEnabled) {
-    await redisCmd("SADD", SCHEDULE_SET_KEY, username);
-  } else {
-    await redisCmd("SREM", SCHEDULE_SET_KEY, username);
-  }
 }
 
 export async function loadSummarySettings(username: string): Promise<SummarySettings> {
@@ -360,35 +329,6 @@ export async function loadSummarySettings(username: string): Promise<SummarySett
   } catch {
     return { ...DEFAULT_SUMMARY_SETTINGS };
   }
-}
-
-/** Usernames opted into the daily summary — union of the Redis registry and local files. */
-export async function listScheduledSummaryUsers(): Promise<string[]> {
-  const users = new Set<string>();
-
-  const members = await redisCmd<string[]>("SMEMBERS", SCHEDULE_SET_KEY);
-  if (Array.isArray(members)) for (const u of members) users.add(u);
-
-  // Local fallback (dev / no-Redis): scan user dirs for an enabled summary.json
-  try {
-    if (fs.existsSync(DATA_DIR)) {
-      for (const entry of fs.readdirSync(DATA_DIR, { withFileTypes: true })) {
-        if (!entry.isDirectory() || entry.name === "__shared__") continue;
-        const file = path.join(DATA_DIR, entry.name, "summary.json");
-        if (!fs.existsSync(file)) continue;
-        try {
-          const s = JSON.parse(fs.readFileSync(file, "utf8")) as SummarySettings;
-          if (s.scheduleEnabled) {
-            // credentials.enc stores the real username; dir name is sanitized.
-            // Reading the summary alongside is enough — caller loads by this key.
-            users.add(entry.name);
-          }
-        } catch {}
-      }
-    }
-  } catch {}
-
-  return [...users];
 }
 
 // ── Sign-out ──────────────────────────────────────────────────────────────────

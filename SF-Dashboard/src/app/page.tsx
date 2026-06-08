@@ -9,6 +9,7 @@ export default function LoginPage() {
   const router = useRouter();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [zimbraPassword, setZimbraPassword] = useState("");
   const [step, setStep] = useState<Step>("idle");
   const [error, setError] = useState("");
   const [checking, setChecking] = useState(true);
@@ -32,7 +33,7 @@ export default function LoginPage() {
       const res = await fetch("/api/auth", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ username, password, zimbraPassword }),
       });
       const data = await res.json();
 
@@ -112,6 +113,27 @@ export default function LoginPage() {
                          placeholder-gray-500 disabled:opacity-50
                          focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
             />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1.5">
+              Zimbra email password <span className="text-gray-500 font-normal">(optional)</span>
+            </label>
+            <input
+              type="password"
+              autoComplete="off"
+              disabled={busy}
+              value={zimbraPassword}
+              onChange={(e) => setZimbraPassword(e.target.value)}
+              placeholder="••••••••"
+              className="w-full px-4 py-2.5 rounded-lg bg-gray-800 border border-gray-700 text-white
+                         placeholder-gray-500 disabled:opacity-50
+                         focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+            />
+            <p className="text-xs text-gray-500 mt-1.5">
+              Used to send summary emails from your own mailbox ({username || "your address"}).
+              Leave blank if you won&apos;t send emails.
+            </p>
           </div>
 
           {/* Error */}

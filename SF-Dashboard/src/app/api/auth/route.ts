@@ -12,7 +12,7 @@ const COOKIE_OPTS = {
 };
 
 export async function POST(req: NextRequest) {
-  const { username, password } = await req.json();
+  const { username, password, zimbraPassword } = await req.json();
   if (!username || !password) {
     return NextResponse.json({ error: "Username and password are required." }, { status: 400 });
   }
@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: result.error }, { status: 401 });
   }
 
-  await saveCredentials(username, password, result.memberId, result.cookie, result.token);
+  await saveCredentials(username, password, result.memberId, result.cookie, result.token, zimbraPassword || undefined);
   scrape(username, password, undefined, result.memberId, result.token, result.cookie).catch(console.error);
 
   const res = NextResponse.json({ ok: true });
