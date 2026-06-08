@@ -67,6 +67,11 @@ export async function sendMail(opts: {
     port: PORT,
     secure: SECURE,
     auth: { user, pass },
+    // Fail fast instead of hanging when the mail server is unreachable
+    // (e.g. an internal server not reachable from the hosting network).
+    connectionTimeout: 15000,
+    greetingTimeout: 10000,
+    socketTimeout: 20000,
     tls: {
       rejectUnauthorized: TLS_REJECT_UNAUTHORIZED,
       ...(TLS_SERVERNAME ? { servername: TLS_SERVERNAME } : {}),
