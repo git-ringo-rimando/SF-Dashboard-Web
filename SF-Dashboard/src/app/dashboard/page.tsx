@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import type { DashboardCache, TicketRow, ModuleRow, SeverityRow, RecentTicket, ProductTag, TagMap } from "@/lib/store";
 import type { SummaryData } from "@/lib/summary";
-import { PERMANENT_RECIPIENTS } from "@/lib/summary";
+import { PERMANENT_RECIPIENTS, renderSummaryHtml, summarySubject, withPermanentRecipients, buildSummaryEml } from "@/lib/summary";
 
 const REFRESH_MS = 5 * 60 * 1000;
 
@@ -1267,6 +1267,43 @@ function SummaryModal({ onClose, summary, userEmail }: { onClose: () => void; su
     }
   }
 
+  // Open the summary as a ready-to-send draft in the user's Outlook.
+  // Tries to open it directly (works when the app runs on the user's Windows
+  // machine); otherwise falls back to downloading the .eml to open manually.
+  async function openInOutlook() {
+    const typed = input.split(/[,;\s]+/).map((p) => p.trim()).filter(Boolean);
+    const bad = typed.find((p) => !EMAIL_RE.test(p));
+    if (bad) { setStatus({ kind: "err", msg: `Invalid email: ${bad}` }); return; }
+    if (typed.length) { setRecipients([...new Set([...recipients, ...typed])]); setInput(""); }
+    const custom = [...recipients, ...typed];
+
+    // 1) Try opening directly in Outlook on the host machine.
+    try {
+      const res = await fetch("/api/open-outlook", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recipients: custom, summary }),
+      });
+      if (res.ok) { setStatus({ kind: "ok", msg: "Opening in Outlook…" }); return; }
+    } catch { /* fall through to download */ }
+
+    // 2) Fallback — download the .eml; the user opens it in Outlook.
+    const to = withPermanentRecipients(custom, userEmail);
+    const subject = summarySubject(summary, userEmail);
+    const eml = buildSummaryEml({ from: userEmail, to, subject, html: renderSummaryHtml(summary, userEmail) });
+    const safeName = subject.replace(/[\\/:*?"<>|]/g, "_").slice(0, 120) || "SF Dashboard Summary";
+    const blob = new Blob([eml], { type: "message/rfc822" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${safeName}.eml`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    setStatus({ kind: "ok", msg: "Downloaded. Open the .eml file to send from Outlook." });
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-16 px-4">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
@@ -1338,19 +1375,33 @@ function SummaryModal({ onClose, summary, userEmail }: { onClose: () => void; su
           )}
 
           <div className="flex items-center justify-between gap-2 pt-1">
-            <button
-              onClick={sendNow}
-              disabled={busy || !emailReady}
-              className="text-xs px-3.5 py-2 rounded-lg bg-teal-600 hover:bg-teal-500 text-white font-medium disabled:opacity-50 transition"
-            >
-              {busy ? "Working…" : "Send now"}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={openInOutlook}
+                className="flex items-center gap-1.5 text-xs px-3.5 py-2 rounded-lg bg-teal-600 hover:bg-teal-500 text-white font-medium transition"
+                title="Download a draft that opens in Outlook, ready to send"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+                Open in Outlook
+              </button>
+              <button
+                onClick={sendNow}
+                disabled={busy || !emailReady}
+                className="text-xs px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-gray-300 hover:border-gray-500 disabled:opacity-50 transition"
+                title="Send directly via SMTP (only works when the app can reach the mail server)"
+              >
+                {busy ? "Working…" : "Send via server"}
+              </button>
+            </div>
             <button
               onClick={save}
               disabled={busy}
-              className="text-xs px-3.5 py-2 rounded-lg bg-gray-800 border border-gray-700 text-gray-200 hover:border-gray-500 disabled:opacity-50 transition"
+              className="text-xs px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-gray-200 hover:border-gray-500 disabled:opacity-50 transition"
             >
-              Save settings
+              Save
             </button>
           </div>
         </div>

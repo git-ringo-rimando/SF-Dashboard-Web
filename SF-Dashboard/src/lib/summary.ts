@@ -25,6 +25,36 @@ export function withPermanentRecipients(custom: string[], userEmail?: string | n
   });
 }
 
+// ── .eml generation (works in Node 18+ and the browser — both have btoa/TextEncoder) ──
+
+function utf8ToBase64(s: string): string {
+  const bytes = new TextEncoder().encode(s);
+  let bin = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    bin += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(bin);
+}
+
+/**
+ * Build an .eml (RFC 822) message. The `X-Unsent: 1` header makes Outlook open
+ * it as an editable, ready-to-send draft rather than a read-only message.
+ */
+export function buildSummaryEml(opts: { from: string | null; to: string[]; subject: string; html: string }): string {
+  const wrap76 = (s: string) => s.replace(/.{1,76}/g, "$&\r\n");
+  const headers = [
+    "X-Unsent: 1",
+    ...(opts.from ? [`From: ${opts.from}`] : []),
+    `To: ${opts.to.join(", ")}`,
+    `Subject: =?UTF-8?B?${utf8ToBase64(opts.subject)}?=`,
+    "MIME-Version: 1.0",
+    "Content-Type: text/html; charset=UTF-8",
+    "Content-Transfer-Encoding: base64",
+  ].join("\r\n");
+  return `${headers}\r\n\r\n${wrap76(utf8ToBase64(opts.html))}`;
+}
+
 export interface SummaryTotals {
   all: number;
   open: number;
