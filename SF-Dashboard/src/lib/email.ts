@@ -1,14 +1,15 @@
 // SMTP email sender (Nodemailer) — works with any standard mail server,
 // including Zimbra.
 //
-// Uses a fixed service account (MAILER-DAEMON) to send all emails.
-// The authenticating account is shared, not per-user.
+// Each email is sent from the logged-in user's mailbox using their Zimbra password.
+// If no user password is available, falls back to fixed credentials (if set).
 //
 // Required:
 //   SMTP_HOST   — mail server hostname (e.g. mail.dataon.ph)
-//   SMTP_USER   — daemon account username (e.g. mailer-daemon)
-//   SMTP_PASS   — daemon account password
-//   SMTP_FROM   — sender email address (e.g. MAILER-DAEMON@mail.dataon.com)
+// Optional (defaults to logged-in user):
+//   SMTP_USER   — fallback sender account username (if user has no password)
+//   SMTP_PASS   — fallback sender account password (if user has no password)
+//   SMTP_FROM   — fallback sender email (if user has no password, defaults to SMTP_USER)
 // Optional:
 //   SMTP_PORT       — default 587 (STARTTLS). Use 465 for implicit SSL.
 //   SMTP_SECURE     — "true" forces SSL; defaults to true when port is 465, else false.
@@ -43,13 +44,20 @@ export async function sendMail(opts: {
   subject: string;
   html: string;
   cc?: string[];
+  smtpUser?: string;
+  smtpPass?: string;
+  from?: string;
 }): Promise<void> {
   if (!emailConfigured()) {
-    throw new Error("Email is not configured. Set SMTP_HOST, SMTP_USER, SMTP_PASS, and SMTP_FROM.");
+    throw new Error("Email is not configured. Set SMTP_HOST.");
   }
 
-  if (!ENV_USER || !ENV_PASS || !ENV_FROM) {
-    throw new Error("Email credentials incomplete. Set SMTP_USER, SMTP_PASS, and SMTP_FROM.");
+  const smtpUser = opts.smtpUser || ENV_USER;
+  const smtpPass = opts.smtpPass || ENV_PASS;
+  const from = opts.from || ENV_FROM;
+
+  if (!smtpUser || !smtpPass || !from) {
+    throw new Error("Email credentials incomplete. Provide SMTP_USER, SMTP_PASS, and SMTP_FROM (or set environment variables).");
   }
 
   const to = opts.to.map((a) => a.trim()).filter(Boolean);
@@ -59,7 +67,7 @@ export async function sendMail(opts: {
     host: HOST,
     port: PORT,
     secure: SECURE,
-    auth: { user: ENV_USER, pass: ENV_PASS },
+    auth: { user: smtpUser, pass: smtpPass },
     connectionTimeout: 15000,
     greetingTimeout: 10000,
     socketTimeout: 20000,
@@ -70,7 +78,7 @@ export async function sendMail(opts: {
   });
 
   await transporter.sendMail({
-    from: ENV_FROM,
+    from,
     to,
     cc: (opts.cc ?? []).map((a) => a.trim()).filter(Boolean),
     subject: opts.subject,

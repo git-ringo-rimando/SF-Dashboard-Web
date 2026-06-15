@@ -57,6 +57,9 @@ export async function POST(req: NextRequest) {
       to: recipients,
       subject: summarySubject(summary, displayName),
       html: renderSummaryHtml(summary, displayName),
+      smtpUser: username,
+      smtpPass: creds?.zimbraPassword,
+      from: username,
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

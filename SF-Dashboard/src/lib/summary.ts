@@ -9,7 +9,7 @@ import type { DashboardCache, SeverityRow, ModuleRow } from "./store";
 
 // Always-included recipients for every summary email (manual + scheduled).
 // The logged-in user is added on top of these at send time.
-export const PERMANENT_RECIPIENTS = ["sdpopslead@dataon.ph", "s.coles@dataon.ph"];
+export const PERMANENT_RECIPIENTS = ["r.rimando@dataon.ph", "claude.ai@dataon.ph"];
 
 /** Merge permanent recipients + the logged-in user into the custom list, deduped. */
 export function withPermanentRecipients(custom: string[], userEmail?: string | null): string[] {
