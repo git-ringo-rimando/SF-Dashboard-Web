@@ -24,6 +24,17 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Direct-open launches Outlook on the SERVER machine. Only do that for a request
+  // coming from the host itself (localhost); remote/LAN users must use the .eml
+  // download so the draft opens in *their* Outlook, not the server's.
+  const host = (req.headers.get("host") ?? "").split(":")[0].toLowerCase();
+  if (!["localhost", "127.0.0.1", "::1", "[::1]"].includes(host)) {
+    return NextResponse.json(
+      { error: "Remote request — use the .eml download to open in your own Outlook." },
+      { status: 503 }
+    );
+  }
+
   const body = await req.json().catch(() => ({})) as { recipients?: string[]; summary?: unknown };
 
   const custom = (body.recipients ?? []).map((r) => r.trim()).filter(Boolean);
@@ -38,8 +49,10 @@ export async function POST(req: NextRequest) {
     summary = cacheToSummaryData(cache);
   }
 
+  const senderEmail = process.env.SMTP_FROM || "MAILER-DAEMON@mail.dataon.com";
+
   const eml = buildSummaryEml({
-    from: displayName,
+    from: senderEmail,
     to,
     subject: summarySubject(summary, displayName),
     html: renderSummaryHtml(summary, displayName),
